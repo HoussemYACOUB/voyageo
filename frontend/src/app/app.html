@@ -31,7 +31,7 @@
     <select [(ngModel)]="limitFilter" (change)="applyFilters()">
       <option value="DETAILED">Vue détaillée</option>
       <option value="CREDIT">Crédit</option>
-      <option value="MARKET">Contrepartie</option>
+      <option value="COUNTERPARTY">Contrepartie</option>
       <option value="LIQUIDITY">Liquidité</option>
     </select>
   </section>
@@ -94,7 +94,7 @@
           Type de risque
           <select formControlName="riskType">
             <option value="CREDIT">CREDIT</option>
-            <option value="MARKET">MARKET</option>
+            <option value="COUNTERPARTY">COUNTERPARTY</option>
             <option value="LIQUIDITY">LIQUIDITY</option>
           </select>
         </label>
