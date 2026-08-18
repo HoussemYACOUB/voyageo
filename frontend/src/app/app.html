@@ -1,0 +1,144 @@
+<div class="riskboard-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">RiskBoard</p>
+      <h1>Dashboard de risque</h1>
+    </div>
+    <label class="upload-box">
+      <input type="file" accept=".csv" (change)="onFileSelected($event)" />
+      <span>Importer un CSV</span>
+    </label>
+  </header>
+
+  <section class="summary-grid">
+    <article class="summary-card">
+      <span>Total contreparties</span>
+      <strong>{{ rows.length }}</strong>
+    </article>
+    <article class="summary-card warn">
+      <span>Alertes</span>
+      <strong>{{ rows.filter(r => r.riskStatus === 'RED').length }}</strong>
+    </article>
+    <article class="summary-card ok">
+      <span>Exposition totale</span>
+      <strong>{{ rows.reduce((sum, row) => sum + row.usedAmount, 0) | number:'1.0-2' }}</strong>
+    </article>
+  </section>
+
+  <section class="toolbar">
+    <input type="search" [(ngModel)]="searchTerm" (input)="applyFilters()" placeholder="Rechercher une contrepartie" />
+
+    <select [(ngModel)]="limitFilter" (change)="applyFilters()">
+      <option value="DETAILED">Vue détaillée</option>
+      <option value="CREDIT">Crédit</option>
+      <option value="MARKET">Contrepartie</option>
+      <option value="LIQUIDITY">Liquidité</option>
+    </select>
+  </section>
+
+  <div class="content-grid">
+    <section class="panel table-panel">
+      <h2>Exposition par limite</h2>
+      <table>
+        <thead>
+          <tr>
+            <th (click)="setSort('name')">Nom</th>
+            <th (click)="setSort('sector')">Secteur</th>
+            <th (click)="setSort('limitType')">Type</th>
+            <th (click)="setSort('usedAmount')">Utilisé</th>
+            <th (click)="setSort('usageRate')">Usage</th>
+            <th (click)="setSort('riskStatus')">Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of paginatedRows">
+            <td>{{ row.name }}</td>
+            <td>{{ row.sector }}</td>
+            <td>{{ row.limitType }}</td>
+            <td>{{ row.usedAmount | number:'1.0-2' }} {{ row.currency }}</td>
+            <td>{{ row.usageRate }}%</td>
+            <td><span class="status" [ngClass]="row.riskStatus.toLowerCase()">{{ row.riskStatus }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="pagination" *ngIf="filteredRows.length > 0">
+        <button type="button" (click)="previousPage()" [disabled]="currentPage === 1">Précédent</button>
+        <span>Page {{ currentPage }} / {{ totalPages }}</span>
+        <button type="button" (click)="nextPage()" [disabled]="currentPage >= totalPages">Suivant</button>
+      </div>
+    </section>
+
+    <aside class="panel side-panel">
+      <h2>Vue par secteur</h2>
+      <div class="sector-list" *ngIf="aggregatedRows.length; else noAggregation">
+        <div class="sector-item" *ngFor="let item of aggregatedRows">
+          <span>{{ item.sector }}</span>
+          <strong>{{ item.totalUsed | number:'1.0-2' }}</strong>
+        </div>
+      </div>
+      <ng-template #noAggregation>
+        <p class="empty-state">Aucune agrégation pour cette vue.</p>
+      </ng-template>
+
+      <h2>Demande de dérogation</h2>
+      <form [formGroup]="derogationForm" (ngSubmit)="onSubmitDerogation()" class="derogation-form">
+        <label>
+          Contrepartie
+          <select formControlName="counterpartyId">
+            <option value="">Sélectionner</option>
+            <option *ngFor="let c of counterpartyOptions" [value]="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+        <label>
+          Type de risque
+          <select formControlName="riskType">
+            <option value="CREDIT">CREDIT</option>
+            <option value="MARKET">MARKET</option>
+            <option value="LIQUIDITY">LIQUIDITY</option>
+          </select>
+        </label>
+        <label>
+          Montant
+          <input type="number" formControlName="amount" step="0.01" />
+        </label>
+        <label>
+          Raison
+          <textarea formControlName="reason" rows="3"></textarea>
+        </label>
+        <label>
+          Demandeur
+          <input type="text" formControlName="requestedBy" />
+        </label>
+
+        <div class="form-errors" *ngIf="(validationErrors | keyvalue)?.length; else noErrors">
+          <p *ngFor="let entry of validationErrors | keyvalue">{{ entry.value }}</p>
+        </div>
+        <ng-template #noErrors>
+          <p class="empty-state">Aucune erreur de validation.</p>
+        </ng-template>
+
+        <button type="submit" class="primary">Soumettre</button>
+      </form>
+    </aside>
+  </div>
+
+  <section class="panel request-panel">
+    <h2>Demandes en attente</h2>
+    <div class="request-list" *ngIf="pendingRequests.length; else noPending">
+      <article class="request-card" *ngFor="let request of pendingRequests">
+        <div>
+          <strong>{{ request.counterpartyName }}</strong>
+          <span>{{ request.riskType }} · {{ request.amount }}</span>
+        </div>
+        <div class="request-actions">
+          <button type="button" class="success" (click)="approveRequest(request.id)">Approuver</button>
+          <button type="button" class="danger" (click)="rejectRequest(request.id)">Refuser</button>
+        </div>
+      </article>
+    </div>
+    <ng-template #noPending>
+      <p class="empty-state">Aucune demande à traiter.</p>
+    </ng-template>
+  </section>
+</div>
