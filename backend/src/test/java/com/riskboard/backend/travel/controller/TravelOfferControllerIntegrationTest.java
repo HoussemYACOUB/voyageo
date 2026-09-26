@@ -24,4 +24,19 @@ class TravelOfferControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].id").value("train-paris-1"))
                 .andExpect(jsonPath("$[0].demo").value(true));
     }
+
+    @Test
+    void sortsByRatingWhenRequested() throws Exception {
+        mockMvc.perform(get("/api/offers").param("sort", "rating"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("hotel-lisbonne-1"));
+    }
+
+    @Test
+    void exposesDistinctDestinationsForAutocomplete() throws Exception {
+        mockMvc.perform(get("/api/offers/destinations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("Lisbonne"))
+                .andExpect(jsonPath("$.length()").value(6));
+    }
 }

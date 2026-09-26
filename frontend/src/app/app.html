@@ -1,14 +1,58 @@
 <div class="app-shell">
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Voyageo, accueil">
-      <span class="brand-mark">v</span><span>voyageo<span class="brand-dot">.</span></span>
+      <span class="brand-mark" aria-hidden="true">🧭</span><span>voyageo<span class="brand-dot">.</span></span>
     </a>
     <nav class="header-links" aria-label="Navigation principale">
       <a class="active-link" href="#recherche">Explorer</a>
       <button class="favorites-link" type="button" [attr.aria-pressed]="favoritesOnly()" (click)="toggleFavoritesView()">Mes favoris <span class="favorite-count">{{ savedCount() }}</span></button>
     </nav>
-    <button class="profile-button" type="button" aria-label="Profil utilisateur">A</button>
+    <div class="account-actions">
+      @if (isAuthenticated()) {
+        <span class="welcome-user">Bonjour {{ user()?.displayName }}</span>
+        <button class="profile-button" type="button" aria-label="Profil utilisateur connecté">{{ userInitial() }}</button>
+        <button class="auth-secondary" type="button" (click)="logout()">Déconnexion</button>
+      } @else {
+        <button class="auth-secondary" type="button" (click)="openAuth('register')">Créer un compte</button>
+        <button class="profile-button" type="button" aria-label="Connexion" (click)="openAuth('login')">↪</button>
+      }
+    </div>
   </header>
+
+  @if (authOpen()) {
+    <section class="auth-panel" aria-label="Connexion et inscription">
+      <div class="auth-header">
+        <h3>{{ authMode() === 'login' ? 'Connexion sécurisée' : 'Créer votre compte' }}</h3>
+        <button type="button" class="auth-close" (click)="closeAuth()">✕</button>
+      </div>
+      <div class="auth-tabs">
+        <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">Connexion</button>
+        <button type="button" [class.active]="authMode() === 'register'" (click)="authMode.set('register')">Inscription</button>
+      </div>
+      <form class="auth-form" (ngSubmit)="submitAuth()">
+        @if (authMode() === 'register') {
+          <label>
+            <span>Nom affiché</span>
+            <input type="text" name="displayName" [ngModel]="authDisplayName()" (ngModelChange)="authDisplayName.set($event)" required>
+          </label>
+        }
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" [ngModel]="authEmail()" (ngModelChange)="authEmail.set($event)" required>
+        </label>
+        <label>
+          <span>Mot de passe</span>
+          <input type="password" name="password" [ngModel]="authPassword()" (ngModelChange)="authPassword.set($event)" required>
+        </label>
+        @if (authError()) {
+          <p class="auth-error">{{ authError() }}</p>
+        }
+        <button class="auth-submit" type="submit" [disabled]="authLoading()">
+          {{ authLoading() ? 'Traitement…' : authMode() === 'login' ? 'Se connecter' : 'Créer mon compte' }}
+        </button>
+      </form>
+    </section>
+  }
 
   <main id="top">
     <section class="hero" aria-labelledby="hero-title">
@@ -19,6 +63,10 @@
       </div>
       <div class="hero-stamp"><span>✈</span><small>PARTOUT<br>AVEC VOUS</small></div>
       <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+      <div class="hero-shortcuts" role="group" aria-label="Raccourcis de recherche">
+        <button type="button" (click)="selectCategory('FLIGHT')"><span>✈</span> Trouver un vol</button>
+        <button type="button" (click)="selectCategory('HOTEL')"><span>⌂</span> Trouver un hôtel</button>
+      </div>
     </section>
 
     <section class="search-panel" id="recherche" aria-label="Recherche de voyage">
@@ -27,7 +75,12 @@
           <span class="field-icon">⌖</span>
           <span class="field-content">
             <span class="field-label">Votre destination</span>
-            <input name="destination" type="search" placeholder="France, Europe, ailleurs…" [ngModel]="destination()" (ngModelChange)="destination.set($event)" aria-label="Destination">
+            <input name="destination" type="search" list="destination-suggestions" placeholder="France, Europe, ailleurs…" [ngModel]="destination()" (ngModelChange)="destination.set($event)" aria-label="Destination">
+            <datalist id="destination-suggestions">
+              @for (suggestion of destinationSuggestions(); track suggestion) {
+                <option [value]="suggestion"></option>
+              }
+            </datalist>
           </span>
         </label>
         <span class="field-divider"></span>
@@ -60,7 +113,22 @@
         </label>
         <button class="search-button" type="submit" [disabled]="loading()"><span>⌕</span> {{ loading() ? 'Recherche…' : 'Rechercher' }}</button>
       </form>
-      <p class="search-note">Les dates et voyageurs seront pris en compte avec les fournisseurs connectés.</p>
+      <div class="quick-suggestions" role="group" aria-label="Destinations populaires">
+        <span>Populaire :</span>
+        @for (suggestion of destinationSuggestions(); track suggestion) {
+          <button type="button" class="suggestion-chip" (click)="quickSearch(suggestion)">{{ suggestion }}</button>
+        }
+      </div>
+      <div class="partner-strip" role="group" aria-label="Plateformes partenaires">
+        <span>Comparer aussi sur :</span>
+        @for (partner of visiblePartners(); track partner.id) {
+          <a class="partner-chip" [href]="partner.url" target="_blank" rel="noopener noreferrer">
+            <span class="partner-badge">{{ partner.badge }}</span>
+            {{ partner.name }}
+          </a>
+        }
+      </div>
+      <p class="search-note">La recherche se met à jour automatiquement pendant la saisie. Les dates et voyageurs seront pris en compte avec les fournisseurs connectés.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
@@ -75,6 +143,14 @@
             <span>{{ category.icon }}</span>{{ category.label }}
           </button>
         }
+        <label class="sort-select">
+          <span>Trier :</span>
+          <select [ngModel]="sortBy()" (ngModelChange)="selectSort($event)" name="sort" aria-label="Trier les offres">
+            @for (option of sortOptions; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </select>
+        </label>
       </div>
 
       <div class="demo-notice" role="note">
@@ -100,8 +176,18 @@
               <div class="offer-content">
                 <div class="offer-title-row"><div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div><span class="rating">★ {{ offer.rating | number:'1.1-1' }}</span></div>
                 <p class="offer-details">{{ offer.details }}</p>
-                <div class="offer-footer"><span class="provider">{{ offer.provider }}</span><div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.category === 'CAR' ? '/ jour · exemple' : '· exemple' }}</span></div></div>
-                <button class="offer-action" type="button" disabled>Réservation bientôt disponible <span>↗</span></button>
+                <div class="offer-footer">
+                  <span class="provider">
+                    <span class="provider-badge" [style.background]="providerColor(offer)">{{ providerBadge(offer) }}</span>
+                    {{ providerDisplayName(offer) }}
+                  </span>
+                  <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.category === 'CAR' ? '/ jour · exemple' : '· exemple' }}</span></div>
+                </div>
+                @if (providerUrl(offer); as url) {
+                  <a class="offer-action offer-action-link" [href]="url" target="_blank" rel="noopener noreferrer">Voir sur {{ providerDisplayName(offer) }} <span>↗</span></a>
+                } @else {
+                  <button class="offer-action" type="button" disabled>Réservation bientôt disponible <span>↗</span></button>
+                }
               </div>
             </article>
           }

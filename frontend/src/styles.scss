@@ -11,6 +11,12 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
+body {
+	background:
+		radial-gradient(900px 420px at 10% -20%, #d5f8ee 0%, transparent 58%),
+		radial-gradient(820px 390px at 100% -10%, #dbe8ff 0%, transparent 62%),
+		#f7f8fc;
+}
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible { outline: 3px solid #7ddcc7; outline-offset: 2px; }

@@ -42,4 +42,19 @@ class TravelOfferServiceTest {
     void returnsNoOffersForAnUnknownDestination() {
         assertTrue(service.search("Tokyo", null).isEmpty());
     }
+
+    @Test
+    void sortsByRatingDescendingWhenRequested() {
+        List<TravelOffer> offers = service.search(null, null, "rating");
+
+        assertEquals("hotel-lisbonne-1", offers.getFirst().id());
+        assertEquals("4.8", offers.getFirst().rating().toPlainString());
+    }
+
+    @Test
+    void listsDistinctDestinationsSortedAlphabetically() {
+        List<String> destinations = service.listDestinations();
+
+        assertEquals(List.of("Lisbonne", "Lyon", "New York", "Nice", "Paris", "Rome"), destinations);
+    }
 }
