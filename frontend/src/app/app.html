@@ -169,6 +169,7 @@
           @for (offer of visibleOffers(); track offer.id) {
             <article class="offer-card">
               <div class="offer-art" [attr.data-category]="offer.category">
+                <img class="art-photo" [src]="offerImageUrl(offer)" [alt]="offer.destination + ' - ' + categoryLabel(offer.category)" loading="lazy" (error)="onOfferImageError($event)">
                 <div class="art-sun"></div><span class="art-icon">{{ offerIcon(offer.category) }}</span>
                 <span class="art-label">{{ categoryLabel(offer.category) }}</span>
                 <button class="save-button" type="button" [attr.aria-label]="isFavorite(offer.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'" [attr.aria-pressed]="isFavorite(offer.id)" (click)="toggleFavorite(offer.id)">{{ isFavorite(offer.id) ? '♥' : '♡' }}</button>

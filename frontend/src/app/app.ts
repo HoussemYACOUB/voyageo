@@ -185,6 +185,23 @@ export class App implements OnInit {
     return this.categories.find((item) => item.id === category)?.icon ?? '✦';
   }
 
+  // Image illustrative basee sur la destination et la categorie (photo libre, sans cle API)
+  protected offerImageUrl(offer: TravelOffer): string {
+    const categoryKeyword: Record<OfferCategory, string> = {
+      HOTEL: 'hotel',
+      FLIGHT: 'airplane',
+      TRAIN: 'train',
+      CAR: 'car',
+    };
+    const destination = encodeURIComponent(offer.destination.trim().toLowerCase());
+    const keyword = categoryKeyword[offer.category];
+    return `https://loremflickr.com/400/300/${destination},${keyword}`;
+  }
+
+  protected onOfferImageError(event: Event): void {
+    (event.target as HTMLImageElement).style.display = 'none';
+  }
+
   protected providerSite(offer: TravelOffer): PartnerSite | null {
     const provider = offer.provider.toLowerCase();
 

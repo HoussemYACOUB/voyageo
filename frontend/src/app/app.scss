@@ -128,12 +128,13 @@
 .offer-art[data-category='FLIGHT'] { background: linear-gradient(130deg, #bed5ef, #7aa5cf); }
 .offer-art[data-category='TRAIN'] { background: linear-gradient(130deg, #f2d8bb, #d9a476); }
 .offer-art[data-category='CAR'] { background: linear-gradient(130deg, #d4c8eb, #a393c5); }
-.offer-art::before, .offer-art::after { content: ''; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff64; border-radius: 50%; }
+.art-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.offer-art::before, .offer-art::after { content: ''; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff64; border-radius: 50%; z-index: 1; }
 .offer-art::before { top: -130px; left: -35px; }
 .offer-art::after { right: -50px; bottom: -150px; width: 280px; height: 280px; }
-.art-sun { position: absolute; top: 22px; right: 25%; width: 42px; height: 42px; border-radius: 50%; background: #ffffff69; filter: blur(.2px); }
-.art-icon { z-index: 1; color: #ffffffea; font-size: 58px; text-shadow: 0 4px 15px #18433b2b; }
-.art-label { position: absolute; bottom: 13px; left: 15px; padding: 5px 9px; border: 1px solid #ffffff82; border-radius: 20px; background: #ffffff34; color: #fff; font-size: 9px; font-weight: 700; backdrop-filter: blur(8px); }
+.art-sun { position: absolute; top: 22px; right: 25%; width: 42px; height: 42px; border-radius: 50%; background: #ffffff69; filter: blur(.2px); z-index: 1; }
+.art-icon { z-index: 1; color: #ffffffea; font-size: 58px; text-shadow: 0 4px 15px #18433b2b; opacity: .55; }
+.art-label { position: absolute; bottom: 13px; left: 15px; padding: 5px 9px; border: 1px solid #ffffff82; border-radius: 20px; background: #00000042; color: #fff; font-size: 9px; font-weight: 700; backdrop-filter: blur(8px); z-index: 1; }
 .save-button { display: grid; position: absolute; z-index: 2; top: 11px; right: 11px; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 50%; background: #ffffffed; color: #168c7e; font-size: 18px; box-shadow: 0 2px 6px #17253616; }
 .offer-content { padding: 15px 15px 13px; }
 .offer-title-row { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
