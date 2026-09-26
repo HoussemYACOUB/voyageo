@@ -24,9 +24,16 @@ export interface RegisterPayload extends LoginPayload {
   displayName: string;
 }
 
+// En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
 function resolveAuthBaseUrl(): string {
-  const host = Capacitor.getPlatform() === 'android' ? '10.0.2.2' : 'localhost';
-  return `http://${host}:8080/api/auth`;
+  if (Capacitor.isNativePlatform()) {
+    const host = Capacitor.getPlatform() === 'android' ? '10.0.2.2' : 'localhost';
+    return `http://${host}:8080/api/auth`;
+  }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:8080/api/auth';
+  }
+  return '/api/auth';
 }
 
 @Injectable({ providedIn: 'root' })
