@@ -1,59 +1,33 @@
-# Frontend
+# Voyageo — application mobile
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.4.
+Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor. L’API Java fournit actuellement un catalogue de démonstration; les prix ne sont ni des tarifs en temps réel ni des offres réservables.
 
-## Development server
+## Prérequis
 
-To start a local development server, run:
+- Node.js pris en charge par Angular 22 et npm
+- Java 21+ pour l’API (`backend/mvnw`)
+- Android Studio + Android SDK pour Android
+- macOS + Xcode pour construire et signer iOS
 
-```bash
-ng serve
-```
+## Lancer en local
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+1. Démarrer l’API depuis `backend/` avec `./mvnw spring-boot:run` (Windows : `mvnw.cmd spring-boot:run`). Elle écoute sur `http://localhost:8080`.
+2. Dans `frontend/`, installer les dépendances avec `npm ci`, puis lancer `npm start`.
+3. Ouvrir `http://localhost:4200`. L’API de démonstration est `GET /api/offers?destination=Paris`.
 
-## Code scaffolding
+Pour un appareil physique, remplacer l’URL de l’API dans `src/app/services/travel-offer.service.ts` par une adresse joignable en HTTPS (ou l’adresse IP locale de développement); `localhost` désigne le téléphone dans une application native.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Android et iOS
 
-```bash
-ng generate component component-name
-```
+Après `npm ci`, ajouter les projets natifs une seule fois avec `npx cap add android` et `npx cap add ios`. Pour synchroniser les dernières ressources web et ouvrir l’IDE : `npm run mobile:sync`, puis `npm run mobile:android` ou `npm run mobile:ios`.
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Les builds/signatures de production se font dans Android Studio et Xcode. L’accès à des fournisseurs de voyage réels demandera des comptes partenaires, des clés conservées uniquement côté serveur et des URL de réservation vérifiées.
 
-```bash
-ng generate --help
-```
+## Tests
 
-## Building
+- Interface : `npm test` (tests unitaires Vitest)
+- API et service : `cd backend && ./mvnw test`
 
-To build the project run:
+## Périmètre de démonstration
 
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+La recherche filtre par destination; les filtres de catégorie et le tri par prix fonctionnent dans l’interface. Les champs de dates et voyageurs sont prêts côté interface mais ne modifient pas encore les exemples. La réservation, les favoris persistants, les prix en direct, les comptes utilisateur et les paiements ne sont pas activés.

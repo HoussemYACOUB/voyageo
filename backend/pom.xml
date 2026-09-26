@@ -11,8 +11,8 @@
 	<groupId>com.riskboard</groupId>
 	<artifactId>backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>RiskBoard</name>
-	<description>RiskBoard backend</description>
+	<name>Voyageo</name>
+	<description>API de comparaison de voyages Voyageo</description>
 	<url/>
 	<licenses>
 		<license/>

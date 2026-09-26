@@ -1,144 +1,119 @@
-<div class="riskboard-shell">
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">RiskBoard</p>
-      <h1>Dashboard de risque</h1>
-    </div>
-    <label class="upload-box">
-      <input type="file" accept=".csv" (change)="onFileSelected($event)" />
-      <span>Importer un CSV</span>
-    </label>
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Voyageo, accueil">
+      <span class="brand-mark">v</span><span>voyageo<span class="brand-dot">.</span></span>
+    </a>
+    <nav class="header-links" aria-label="Navigation principale">
+      <a class="active-link" href="#recherche">Explorer</a>
+      <button class="favorites-link" type="button" [attr.aria-pressed]="favoritesOnly()" (click)="toggleFavoritesView()">Mes favoris <span class="favorite-count">{{ savedCount() }}</span></button>
+    </nav>
+    <button class="profile-button" type="button" aria-label="Profil utilisateur">A</button>
   </header>
 
-  <section class="summary-grid">
-    <article class="summary-card">
-      <span>Total contreparties</span>
-      <strong>{{ rows.length }}</strong>
-    </article>
-    <article class="summary-card warn">
-      <span>Alertes</span>
-      <strong>{{ rows.filter(r => r.riskStatus === 'RED').length }}</strong>
-    </article>
-    <article class="summary-card ok">
-      <span>Exposition totale</span>
-      <strong>{{ rows.reduce((sum, row) => sum + row.usedAmount, 0) | number:'1.0-2' }}</strong>
-    </article>
-  </section>
-
-  <section class="toolbar">
-    <input type="search" [(ngModel)]="searchTerm" (input)="applyFilters()" placeholder="Rechercher une contrepartie" />
-
-    <select [(ngModel)]="limitFilter" (change)="applyFilters()">
-      <option value="DETAILED">Vue détaillée</option>
-      <option value="CREDIT">Crédit</option>
-      <option value="COUNTERPARTY">Contrepartie</option>
-      <option value="LIQUIDITY">Liquidité</option>
-    </select>
-  </section>
-
-  <div class="content-grid">
-    <section class="panel table-panel">
-      <h2>Exposition par limite</h2>
-      <table>
-        <thead>
-          <tr>
-            <th (click)="setSort('name')">Nom</th>
-            <th (click)="setSort('sector')">Secteur</th>
-            <th (click)="setSort('limitType')">Type</th>
-            <th (click)="setSort('usedAmount')">Utilisé</th>
-            <th (click)="setSort('usageRate')">Usage</th>
-            <th (click)="setSort('riskStatus')">Statut</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let row of paginatedRows">
-            <td>{{ row.name }}</td>
-            <td>{{ row.sector }}</td>
-            <td>{{ row.limitType }}</td>
-            <td>{{ row.usedAmount | number:'1.0-2' }} {{ row.currency }}</td>
-            <td>{{ row.usageRate }}%</td>
-            <td><span class="status" [ngClass]="row.riskStatus.toLowerCase()">{{ row.riskStatus }}</span></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination" *ngIf="filteredRows.length > 0">
-        <button type="button" (click)="previousPage()" [disabled]="currentPage === 1">Précédent</button>
-        <span>Page {{ currentPage }} / {{ totalPages }}</span>
-        <button type="button" (click)="nextPage()" [disabled]="currentPage >= totalPages">Suivant</button>
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="sparkle">✦</span> LE VOYAGE, AU BON PRIX</span>
+        <h1 id="hero-title">Le monde vous va <span>si bien.</span></h1>
+        <p>Comparez, choisissez, partez. Votre prochaine belle histoire commence ici.</p>
       </div>
+      <div class="hero-stamp"><span>✈</span><small>PARTOUT<br>AVEC VOUS</small></div>
+      <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
     </section>
 
-    <aside class="panel side-panel">
-      <h2>Vue par secteur</h2>
-      <div class="sector-list" *ngIf="aggregatedRows.length; else noAggregation">
-        <div class="sector-item" *ngFor="let item of aggregatedRows">
-          <span>{{ item.sector }}</span>
-          <strong>{{ item.totalUsed | number:'1.0-2' }}</strong>
-        </div>
-      </div>
-      <ng-template #noAggregation>
-        <p class="empty-state">Aucune agrégation pour cette vue.</p>
-      </ng-template>
-
-      <h2>Demande de dérogation</h2>
-      <form [formGroup]="derogationForm" (ngSubmit)="onSubmitDerogation()" class="derogation-form">
-        <label>
-          Contrepartie
-          <select formControlName="counterpartyId">
-            <option value="">Sélectionner</option>
-            <option *ngFor="let c of counterpartyOptions" [value]="c.id">{{ c.name }}</option>
-          </select>
+    <section class="search-panel" id="recherche" aria-label="Recherche de voyage">
+      <form class="search-form" (ngSubmit)="searchOffers()">
+        <label class="search-field destination-field">
+          <span class="field-icon">⌖</span>
+          <span class="field-content">
+            <span class="field-label">Votre destination</span>
+            <input name="destination" type="search" placeholder="France, Europe, ailleurs…" [ngModel]="destination()" (ngModelChange)="destination.set($event)" aria-label="Destination">
+          </span>
         </label>
-        <label>
-          Type de risque
-          <select formControlName="riskType">
-            <option value="CREDIT">CREDIT</option>
-            <option value="COUNTERPARTY">COUNTERPARTY</option>
-            <option value="LIQUIDITY">LIQUIDITY</option>
-          </select>
+        <span class="field-divider"></span>
+        <label class="search-field date-field">
+          <span class="field-icon">▦</span>
+          <span class="field-content">
+            <span class="field-label">Départ</span>
+            <input name="departure" type="date" [ngModel]="departureDate()" (ngModelChange)="departureDate.set($event)" aria-label="Date de départ">
+          </span>
         </label>
-        <label>
-          Montant
-          <input type="number" formControlName="amount" step="0.01" />
+        <span class="field-divider"></span>
+        <label class="search-field date-field">
+          <span class="field-icon">▦</span>
+          <span class="field-content">
+            <span class="field-label">Retour</span>
+            <input name="return" type="date" [ngModel]="returnDate()" (ngModelChange)="returnDate.set($event)" aria-label="Date de retour">
+          </span>
         </label>
-        <label>
-          Raison
-          <textarea formControlName="reason" rows="3"></textarea>
+        <span class="field-divider"></span>
+        <label class="search-field traveler-field">
+          <span class="field-icon">♙</span>
+          <span class="field-content">
+            <span class="field-label">Voyageurs</span>
+            <select name="travelers" [ngModel]="travelers()" (ngModelChange)="travelers.set(+$event)" aria-label="Nombre de voyageurs">
+              <option [ngValue]="1">1 voyageur</option><option [ngValue]="2">2 voyageurs</option>
+              <option [ngValue]="3">3 voyageurs</option><option [ngValue]="4">4 voyageurs</option>
+              <option [ngValue]="5">5 voyageurs</option><option [ngValue]="6">6 voyageurs</option>
+            </select>
+          </span>
         </label>
-        <label>
-          Demandeur
-          <input type="text" formControlName="requestedBy" />
-        </label>
-
-        <div class="form-errors" *ngIf="(validationErrors | keyvalue)?.length; else noErrors">
-          <p *ngFor="let entry of validationErrors | keyvalue">{{ entry.value }}</p>
-        </div>
-        <ng-template #noErrors>
-          <p class="empty-state">Aucune erreur de validation.</p>
-        </ng-template>
-
-        <button type="submit" class="primary">Soumettre</button>
+        <button class="search-button" type="submit" [disabled]="loading()"><span>⌕</span> {{ loading() ? 'Recherche…' : 'Rechercher' }}</button>
       </form>
-    </aside>
-  </div>
+      <p class="search-note">Les dates et voyageurs seront pris en compte avec les fournisseurs connectés.</p>
+    </section>
 
-  <section class="panel request-panel">
-    <h2>Demandes en attente</h2>
-    <div class="request-list" *ngIf="pendingRequests.length; else noPending">
-      <article class="request-card" *ngFor="let request of pendingRequests">
-        <div>
-          <strong>{{ request.counterpartyName }}</strong>
-          <span>{{ request.riskType }} · {{ request.amount }}</span>
+    <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
+      <div class="section-heading">
+        <div><span class="eyebrow section-eyebrow">À VOUS DE CHOISIR</span><h2 id="discovery-title">Votre prochaine escapade</h2></div>
+        <span class="result-count">{{ visibleOffers().length }} idées à découvrir</span>
+      </div>
+
+      <div class="category-list" role="group" aria-label="Filtrer les offres par catégorie">
+        @for (category of categories; track category.id) {
+          <button type="button" class="category-chip" [class.selected]="activeCategory() === category.id" (click)="selectCategory(category.id)">
+            <span>{{ category.icon }}</span>{{ category.label }}
+          </button>
+        }
+      </div>
+
+      <div class="demo-notice" role="note">
+        <span class="notice-icon">i</span>
+        <p><strong>Mode démonstration</strong> — tarifs indicatifs fictifs, sans disponibilité vérifiée. Aucune réservation n’est effectuée.</p>
+      </div>
+
+      @if (errorMessage()) {
+        <div class="state-message error-state" role="alert"><span>!</span><p>{{ errorMessage() }}</p><button type="button" (click)="searchOffers()">Réessayer</button></div>
+      } @else if (loading() && offers().length === 0) {
+        <div class="state-message" role="status"><span class="loader"></span><p>On prépare de belles idées pour vous…</p></div>
+      } @else if (visibleOffers().length === 0) {
+        <div class="state-message"><span>⌖</span><p>Aucune offre pour cette destination. Essayez une autre ville.</p></div>
+      } @else {
+        <div class="offer-grid">
+          @for (offer of visibleOffers(); track offer.id) {
+            <article class="offer-card">
+              <div class="offer-art" [attr.data-category]="offer.category">
+                <div class="art-sun"></div><span class="art-icon">{{ offerIcon(offer.category) }}</span>
+                <span class="art-label">{{ categoryLabel(offer.category) }}</span>
+                <button class="save-button" type="button" [attr.aria-label]="isFavorite(offer.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'" [attr.aria-pressed]="isFavorite(offer.id)" (click)="toggleFavorite(offer.id)">{{ isFavorite(offer.id) ? '♥' : '♡' }}</button>
+              </div>
+              <div class="offer-content">
+                <div class="offer-title-row"><div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div><span class="rating">★ {{ offer.rating | number:'1.1-1' }}</span></div>
+                <p class="offer-details">{{ offer.details }}</p>
+                <div class="offer-footer"><span class="provider">{{ offer.provider }}</span><div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.category === 'CAR' ? '/ jour · exemple' : '· exemple' }}</span></div></div>
+                <button class="offer-action" type="button" disabled>Réservation bientôt disponible <span>↗</span></button>
+              </div>
+            </article>
+          }
         </div>
-        <div class="request-actions">
-          <button type="button" class="success" (click)="approveRequest(request.id)">Approuver</button>
-          <button type="button" class="danger" (click)="rejectRequest(request.id)">Refuser</button>
-        </div>
-      </article>
-    </div>
-    <ng-template #noPending>
-      <p class="empty-state">Aucune demande à traiter.</p>
-    </ng-template>
-  </section>
+      }
+    </section>
+
+    <section class="bottom-banner" aria-label="Prix minimum">
+      <div class="banner-icon">✦</div><div><strong>Le meilleur prix, sans perdre le plaisir.</strong><span>Comparez les options en un clin d’œil, et gardez vos coups de cœur.</span></div>
+      <span class="banner-price" *ngIf="lowestPrice() !== null">Dès {{ lowestPrice() | currency:'EUR':'symbol':'1.0-0':'fr-FR' }} <small>tarif démo</small></span>
+    </section>
+  </main>
+
+  <footer class="site-footer"><span>© 2026 Voyageo · Fait pour les envies d’ailleurs.</span><span>Tarifs de démonstration uniquement</span></footer>
 </div>
