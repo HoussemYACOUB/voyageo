@@ -185,17 +185,20 @@ export class App implements OnInit {
     return this.categories.find((item) => item.id === category)?.icon ?? '✦';
   }
 
-  // Image illustrative basee sur la destination et la categorie (photo libre, sans cle API)
+  // Photos Unsplash directes (CDN stable, sans cle API) choisies selon la categorie
+  private static readonly categoryPhotoIds: Record<OfferCategory, string[]> = {
+    HOTEL: ['1566073771259-6a8506099945', '1445019980597-93fa8acb246c', '1571003123894-1f0594d2b5d9', '1512918728675-ed5a9ecdebfd'],
+    FLIGHT: ['1436491865332-7a61a109cc05', '1569154941061-e231b4725ef1', '1544620347-c4fd4a3d5957'],
+    TRAIN: ['1517649763962-0c623066013b', '1568605114967-8130f3a36994', '1474487548417-781cb71495f3'],
+    CAR: ['1502877338535-766e1452684a', '1449965408869-eaa3f722e40d', '1503376780353-7e6692767b70', '1494905998402-395d579af36f'],
+  };
+
   protected offerImageUrl(offer: TravelOffer): string {
-    const categoryKeyword: Record<OfferCategory, string> = {
-      HOTEL: 'hotel',
-      FLIGHT: 'airplane',
-      TRAIN: 'train',
-      CAR: 'car',
-    };
-    const destination = encodeURIComponent(offer.destination.trim().toLowerCase());
-    const keyword = categoryKeyword[offer.category];
-    return `https://loremflickr.com/400/300/${destination},${keyword}`;
+    const ids = App.categoryPhotoIds[offer.category];
+    let hash = 0;
+    for (const char of `${offer.destination}-${offer.id}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    const photoId = ids[hash % ids.length];
+    return `https://images.unsplash.com/photo-${photoId}?w=480&h=320&fit=crop&q=70`;
   }
 
   protected onOfferImageError(event: Event): void {
@@ -239,6 +242,15 @@ export class App implements OnInit {
     this.authOpen.set(false);
     this.authLoading.set(false);
     this.authError.set('');
+  }
+
+  // La connexion sociale necessite un Client ID Google/Microsoft configure cote backend
+  protected loginWithProvider(provider: 'google' | 'microsoft'): void {
+    this.authError.set(
+      provider === 'google'
+        ? 'Connexion Google bientôt disponible : configuration du fournisseur en cours.'
+        : 'Connexion Microsoft/Hotmail bientôt disponible : configuration du fournisseur en cours.'
+    );
   }
 
   protected submitAuth(): void {

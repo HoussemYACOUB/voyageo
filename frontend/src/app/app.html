@@ -20,38 +20,49 @@
   </header>
 
   @if (authOpen()) {
-    <section class="auth-panel" aria-label="Connexion et inscription">
-      <div class="auth-header">
-        <h3>{{ authMode() === 'login' ? 'Connexion sécurisée' : 'Créer votre compte' }}</h3>
-        <button type="button" class="auth-close" (click)="closeAuth()">✕</button>
-      </div>
-      <div class="auth-tabs">
-        <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">Connexion</button>
-        <button type="button" [class.active]="authMode() === 'register'" (click)="authMode.set('register')">Inscription</button>
-      </div>
-      <form class="auth-form" (ngSubmit)="submitAuth()">
-        @if (authMode() === 'register') {
+    <div class="auth-overlay" role="presentation" (click)="closeAuth()">
+      <section class="auth-panel" aria-label="Connexion et inscription" (click)="$event.stopPropagation()">
+        <div class="auth-header">
+          <h3>{{ authMode() === 'login' ? 'Connexion sécurisée' : 'Créer votre compte' }}</h3>
+          <button type="button" class="auth-close" (click)="closeAuth()">✕</button>
+        </div>
+        <div class="auth-social">
+          <button type="button" class="auth-social-btn google" (click)="loginWithProvider('google')">
+            <span class="social-icon" aria-hidden="true">G</span> Continuer avec Google
+          </button>
+          <button type="button" class="auth-social-btn microsoft" (click)="loginWithProvider('microsoft')">
+            <span class="social-icon" aria-hidden="true">⊞</span> Continuer avec Microsoft / Hotmail
+          </button>
+        </div>
+        <div class="auth-divider"><span>ou avec un email</span></div>
+        <div class="auth-tabs">
+          <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">Connexion</button>
+          <button type="button" [class.active]="authMode() === 'register'" (click)="authMode.set('register')">Inscription</button>
+        </div>
+        <form class="auth-form" (ngSubmit)="submitAuth()">
+          @if (authMode() === 'register') {
+            <label>
+              <span>Nom affiché</span>
+              <input type="text" name="displayName" [ngModel]="authDisplayName()" (ngModelChange)="authDisplayName.set($event)" required>
+            </label>
+          }
           <label>
-            <span>Nom affiché</span>
-            <input type="text" name="displayName" [ngModel]="authDisplayName()" (ngModelChange)="authDisplayName.set($event)" required>
+            <span>Email</span>
+            <input type="email" name="email" [ngModel]="authEmail()" (ngModelChange)="authEmail.set($event)" required>
           </label>
-        }
-        <label>
-          <span>Email</span>
-          <input type="email" name="email" [ngModel]="authEmail()" (ngModelChange)="authEmail.set($event)" required>
-        </label>
-        <label>
-          <span>Mot de passe</span>
-          <input type="password" name="password" [ngModel]="authPassword()" (ngModelChange)="authPassword.set($event)" required>
-        </label>
-        @if (authError()) {
-          <p class="auth-error">{{ authError() }}</p>
-        }
-        <button class="auth-submit" type="submit" [disabled]="authLoading()">
-          {{ authLoading() ? 'Traitement…' : authMode() === 'login' ? 'Se connecter' : 'Créer mon compte' }}
-        </button>
-      </form>
-    </section>
+          <label>
+            <span>Mot de passe</span>
+            <input type="password" name="password" [ngModel]="authPassword()" (ngModelChange)="authPassword.set($event)" required>
+          </label>
+          @if (authError()) {
+            <p class="auth-error">{{ authError() }}</p>
+          }
+          <button class="auth-submit" type="submit" [disabled]="authLoading()">
+            {{ authLoading() ? 'Traitement…' : authMode() === 'login' ? 'Se connecter' : 'Créer mon compte' }}
+          </button>
+        </form>
+      </section>
+    </div>
   }
 
   <main id="top">
