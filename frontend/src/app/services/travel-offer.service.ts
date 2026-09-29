@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 
 export type OfferCategory = 'HOTEL' | 'FLIGHT' | 'TRAIN' | 'CAR' | 'CARPOOL';
 export type OfferSort = 'price' | 'rating';
@@ -19,6 +19,12 @@ export interface TravelOffer {
   demo: boolean;
 }
 
+export interface CitySuggestion {
+  text: string;
+  placeId?: string;
+  provider?: 'google' | 'fallback';
+}
+
 // En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
 function resolveApiBaseUrl(): string {
   if (Capacitor.isNativePlatform()) {
@@ -31,10 +37,21 @@ function resolveApiBaseUrl(): string {
   return '/api/offers';
 }
 
+function resolveAutocompleteUrl(): string {
+  if (Capacitor.isNativePlatform()) {
+    return 'https://voyageo-app.netlify.app/api/places/autocomplete';
+  }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:8888/api/places/autocomplete';
+  }
+  return '/api/places/autocomplete';
+}
+
 @Injectable({ providedIn: 'root' })
 export class TravelOfferService {
   private readonly http = inject(HttpClient);
   private readonly endpoint = resolveApiBaseUrl();
+  private readonly autocompleteEndpoint = resolveAutocompleteUrl();
 
   search(destination: string, category?: OfferCategory, sort?: OfferSort): Observable<TravelOffer[]> {
     let params = new HttpParams();
@@ -46,5 +63,12 @@ export class TravelOfferService {
 
   destinations(): Observable<string[]> {
     return this.http.get<string[]>(`${this.endpoint}/destinations`);
+  }
+
+  autocomplete(query: string): Observable<CitySuggestion[]> {
+    const params = new HttpParams().set('q', query);
+    return this.http.get<{ suggestions?: CitySuggestion[] }>(this.autocompleteEndpoint, { params }).pipe(
+      map((response) => response.suggestions ?? [])
+    );
   }
 }

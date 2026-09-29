@@ -14,7 +14,7 @@ const demoOffers: TravelOffer[] = [
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
-  let service: { search: ReturnType<typeof vi.fn>; destinations: ReturnType<typeof vi.fn> };
+  let service: { search: ReturnType<typeof vi.fn>; destinations: ReturnType<typeof vi.fn>; autocomplete: ReturnType<typeof vi.fn> };
   let authService: {
     currentUser: ReturnType<typeof signal>;
     isAuthenticated: ReturnType<typeof signal>;
@@ -25,7 +25,11 @@ describe('App', () => {
   };
 
   beforeEach(async () => {
-    service = { search: vi.fn(() => of(demoOffers)), destinations: vi.fn(() => of(['Paris', 'Rome'])) };
+    service = {
+      search: vi.fn(() => of(demoOffers)),
+      destinations: vi.fn(() => of(['Paris', 'Rome'])),
+      autocomplete: vi.fn(() => of([]))
+    };
     authService = {
       currentUser: signal(null),
       isAuthenticated: signal(false),

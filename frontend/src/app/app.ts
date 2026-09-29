@@ -4,9 +4,9 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, skip } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, of, skip, switchMap } from 'rxjs';
 import { AuthService } from './services/auth.service';
-import { OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
+import { CitySuggestion, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 type CategoryFilter = 'ALL' | OfferCategory;
 
@@ -44,6 +44,8 @@ export class App implements OnInit {
   protected readonly loading = signal(false);
   protected readonly errorMessage = signal('');
   protected readonly destinationSuggestions = signal<string[]>([]);
+  protected readonly originAutocompleteSuggestions = signal<CitySuggestion[]>([]);
+  protected readonly destinationAutocompleteSuggestions = signal<CitySuggestion[]>([]);
   protected readonly categories: { id: CategoryFilter; label: string; icon: string }[] = [
     { id: 'ALL', label: 'Tout comparer', icon: '✦' },
     { id: 'HOTEL', label: 'Hébergements', icon: '⌂' },
@@ -93,6 +95,8 @@ export class App implements OnInit {
 
   // Cree en contexte d'injection : necessaire pour toObservable()
   private readonly destinationChanges$ = toObservable(this.destination);
+  private readonly originAutocompleteChanges$ = toObservable(this.origin);
+  private readonly destinationAutocompleteChanges$ = toObservable(this.destination);
 
   protected readonly visibleOffers = computed(() => {
     const category = this.activeCategory();
@@ -135,6 +139,39 @@ export class App implements OnInit {
     this.destinationChanges$
       .pipe(debounceTime(450), distinctUntilChanged(), skip(1))
       .subscribe(() => this.searchOffers());
+    this.originAutocompleteChanges$
+      .pipe(debounceTime(250), distinctUntilChanged(), switchMap((query) => this.autocompleteCities(query)))
+      .subscribe((suggestions) => this.originAutocompleteSuggestions.set(suggestions));
+    this.destinationAutocompleteChanges$
+      .pipe(debounceTime(250), distinctUntilChanged(), switchMap((query) => this.autocompleteCities(query)))
+      .subscribe((suggestions) => this.destinationAutocompleteSuggestions.set(suggestions));
+  }
+
+  private autocompleteCities(query: string) {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) return of<CitySuggestion[]>([]);
+    return this.offerService.autocomplete(trimmedQuery).pipe(catchError(() => of<CitySuggestion[]>([])));
+  }
+
+  protected selectOriginSuggestion(suggestion: CitySuggestion): void {
+    this.origin.set(suggestion.text);
+    this.originAutocompleteSuggestions.set([]);
+  }
+
+  protected selectDestinationSuggestion(suggestion: CitySuggestion): void {
+    this.destination.set(suggestion.text);
+    this.destinationAutocompleteSuggestions.set([]);
+    this.searchOffers();
+  }
+
+  protected updateOrigin(value: string): void {
+    this.origin.set(value);
+    if (value.trim().length < 2) this.originAutocompleteSuggestions.set([]);
+  }
+
+  protected updateDestination(value: string): void {
+    this.destination.set(value);
+    if (value.trim().length < 2) this.destinationAutocompleteSuggestions.set([]);
   }
 
   protected searchOffers(): void {
@@ -269,9 +306,12 @@ export class App implements OnInit {
     }
 
     if (partner.id === 'flights' && origin && destination) {
-      const trip = `Flights from ${origin} to ${destination}`;
-      const dates = departureDate ? ` on ${departureDate}${this.returnDate() ? ` to ${this.returnDate()}` : ''}` : '';
-      return `${partner.url}?q=${encodeURIComponent(`${trip}${dates}`)}&hl=fr&curr=EUR`;
+      const query = new URLSearchParams({
+        q: `Flights from ${origin} to ${destination}${departureDate ? ` on ${departureDate}` : ''}${this.returnDate() ? ` to ${this.returnDate()}` : ''}`,
+        hl: 'fr',
+        curr: 'EUR'
+      });
+      return `${partner.url}?${query.toString()}`;
     }
 
     if (partner.id === 'booking' && destination) {

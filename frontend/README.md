@@ -15,6 +15,12 @@ Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor. L
 2. Dans `frontend/`, installer les dépendances avec `npm ci`, puis lancer `npm start`.
 3. Ouvrir `http://localhost:4200`. L’API de démonstration est `GET /api/offers?destination=Paris`.
 
+## Autocomplétion des villes et Google Flights
+
+Les champs de départ et de destination utilisent Google Places Autocomplete via une fonction Netlify; la clé reste côté serveur. Pour activer les suggestions Google, activez Places API (New) dans Google Cloud avec la facturation et une limite de quota, puis définissez `GOOGLE_MAPS_API_KEY` dans les variables d’environnement du site Netlify. Restreignez la clé à Places API. En local, copiez `.env.example` vers `.env` dans `frontend/` et lancez le projet avec `npx netlify-cli dev` pour que la fonction soit disponible. Sans clé, des villes courantes servent de secours.
+
+Google Flights ne fournit pas d’API publique de recherche de tarifs : Voyageo ouvre une recherche Google Flights préremplie avec les villes et dates choisies. Les cartes de tarifs du site restent des exemples et ne doivent pas être présentées comme des prix live.
+
 Pour un appareil physique, remplacer l’URL de l’API dans `src/app/services/travel-offer.service.ts` par une adresse joignable en HTTPS (ou l’adresse IP locale de développement); `localhost` désigne le téléphone dans une application native.
 
 ## Android et iOS

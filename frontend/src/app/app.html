@@ -77,26 +77,45 @@
 
     <section class="search-panel" id="recherche" aria-label="Recherche de voyage">
       <form class="search-form" (ngSubmit)="searchOffers()">
-        <label class="search-field destination-field">
-          <span class="field-icon">⌖</span>
-          <span class="field-content">
-            <span class="field-label">Votre destination</span>
-            <input name="destination" type="search" list="destination-suggestions" placeholder="France, Europe, ailleurs…" [ngModel]="destination()" (ngModelChange)="destination.set($event)" aria-label="Destination">
-            <datalist id="destination-suggestions">
-              @for (suggestion of destinationSuggestions(); track suggestion) {
-                <option [value]="suggestion"></option>
+        <div class="search-field-wrap destination-autocomplete">
+          <label class="search-field destination-field">
+            <span class="field-icon">⌖</span>
+            <span class="field-content">
+              <span class="field-label">Votre destination</span>
+              <input name="destination" type="search" role="combobox" aria-autocomplete="list" aria-controls="destination-city-options" [attr.aria-expanded]="destinationAutocompleteSuggestions().length > 0" autocomplete="off" placeholder="France, Europe, ailleurs…" [ngModel]="destination()" (ngModelChange)="updateDestination($event)" aria-label="Destination">
+            </span>
+          </label>
+          @if (destinationAutocompleteSuggestions().length > 0) {
+            <div class="autocomplete-menu" id="destination-city-options" role="listbox" aria-label="Suggestions de destination">
+              @for (suggestion of destinationAutocompleteSuggestions(); track suggestion.placeId ?? suggestion.text) {
+                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectDestinationSuggestion(suggestion)">{{ suggestion.text }}</button>
               }
-            </datalist>
-          </span>
-        </label>
+              @if (destinationAutocompleteSuggestions()[0]?.provider === 'google') {
+                <div class="google-maps-attribution" translate="no">Google Maps</div>
+              }
+            </div>
+          }
+        </div>
         <span class="field-divider"></span>
-        <label class="search-field origin-field">
-          <span class="field-icon">⌖</span>
-          <span class="field-content">
-            <span class="field-label">Ville de départ</span>
-            <input name="origin" type="text" placeholder="Ex. Paris" [ngModel]="origin()" (ngModelChange)="origin.set($event)" aria-label="Ville de départ">
-          </span>
-        </label>
+        <div class="search-field-wrap origin-autocomplete">
+          <label class="search-field origin-field">
+            <span class="field-icon">⌖</span>
+            <span class="field-content">
+              <span class="field-label">Ville de départ</span>
+              <input name="origin" type="search" role="combobox" aria-autocomplete="list" aria-controls="origin-city-options" [attr.aria-expanded]="originAutocompleteSuggestions().length > 0" autocomplete="off" placeholder="Ex. Paris" [ngModel]="origin()" (ngModelChange)="updateOrigin($event)" aria-label="Ville de départ">
+            </span>
+          </label>
+          @if (originAutocompleteSuggestions().length > 0) {
+            <div class="autocomplete-menu" id="origin-city-options" role="listbox" aria-label="Suggestions de ville de départ">
+              @for (suggestion of originAutocompleteSuggestions(); track suggestion.placeId ?? suggestion.text) {
+                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectOriginSuggestion(suggestion)">{{ suggestion.text }}</button>
+              }
+              @if (originAutocompleteSuggestions()[0]?.provider === 'google') {
+                <div class="google-maps-attribution" translate="no">Google Maps</div>
+              }
+            </div>
+          }
+        </div>
         <span class="field-divider"></span>
         <label class="search-field date-field">
           <span class="field-icon">▦</span>

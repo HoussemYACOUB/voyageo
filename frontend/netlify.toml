@@ -3,6 +3,12 @@
   publish = "dist/frontend/browser"
 
 [[redirects]]
+  from = "/api/places/autocomplete"
+  to = "/.netlify/functions/places-autocomplete"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "https://voyageo-backend.onrender.com/api/:splat"
   status = 200

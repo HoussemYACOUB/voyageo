@@ -50,4 +50,15 @@ describe('TravelOfferService', () => {
     expect(request.request.method).toBe('GET');
     request.flush(['Lyon', 'Paris']);
   });
+
+  it('requests Google city autocomplete through the Netlify function', () => {
+    service.autocomplete('Lisbon').subscribe((suggestions) => {
+      expect(suggestions).toEqual([{ text: 'Lisbon, Portugal', placeId: 'place-id', provider: 'google' }]);
+    });
+
+    const request = http.expectOne((candidate) => candidate.url === 'http://localhost:8888/api/places/autocomplete');
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('q')).toBe('Lisbon');
+    request.flush({ suggestions: [{ text: 'Lisbon, Portugal', placeId: 'place-id', provider: 'google' }] });
+  });
 });
