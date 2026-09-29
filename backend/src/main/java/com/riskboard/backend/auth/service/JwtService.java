@@ -21,9 +21,16 @@ public class JwtService {
 
     public JwtService(
             @Value("${security.jwt.secret}") String secret,
-            @Value("${security.jwt.expiration-seconds:86400}") long expirationSeconds
+            @Value("${security.jwt.expiration-seconds:3600}") long expirationSeconds
     ) {
-        this.key = Keys.hmacShaKeyFor(normalizeSecret(secret).getBytes(StandardCharsets.UTF_8));
+        String configuredSecret = secret == null ? "" : secret.trim();
+        if (configuredSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalArgumentException("JWT_SECRET doit contenir au moins 32 octets.");
+        }
+        if (expirationSeconds <= 0) {
+            throw new IllegalArgumentException("JWT_EXPIRATION_SECONDS doit être positif.");
+        }
+        this.key = Keys.hmacShaKeyFor(configuredSecret.getBytes(StandardCharsets.UTF_8));
         this.expirationSeconds = expirationSeconds;
     }
 
@@ -56,18 +63,5 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-    }
-
-    private static String normalizeSecret(String secret) {
-        String value = secret == null ? "" : secret.trim();
-        if (value.length() >= 32) {
-            return value;
-        }
-
-        StringBuilder builder = new StringBuilder(value);
-        while (builder.length() < 32) {
-            builder.append("_secure_voyageo_secret_");
-        }
-        return builder.substring(0, 32);
     }
 }

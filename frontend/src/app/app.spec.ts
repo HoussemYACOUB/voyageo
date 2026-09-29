@@ -113,4 +113,28 @@ describe('App', () => {
 
     expect(service.search).toHaveBeenLastCalledWith('', undefined, 'rating');
   });
+
+  it('opens a BlaBlaCar search with the selected route and departure date', () => {
+    const origin = fixture.nativeElement.querySelector('input[name="origin"]') as HTMLInputElement;
+    origin.value = 'Paris';
+    origin.dispatchEvent(new Event('input'));
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Lyon';
+    destination.dispatchEvent(new Event('input'));
+    const departure = fixture.nativeElement.querySelector('input[name="departure"]') as HTMLInputElement;
+    departure.value = '2026-10-15';
+    departure.dispatchEvent(new Event('input'));
+
+    const carpoolFilter = Array.from(fixture.nativeElement.querySelectorAll('.category-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Covoiturage'));
+    carpoolFilter?.click();
+    fixture.detectChanges();
+
+    const partnerLink = fixture.nativeElement.querySelector('.partner-chip') as HTMLAnchorElement;
+    expect(partnerLink.textContent).toContain('BlaBlaCar');
+    expect(partnerLink.getAttribute('href')).toContain('fn=Paris');
+    expect(partnerLink.getAttribute('href')).toContain('tn=Lyon');
+    expect(partnerLink.getAttribute('href')).toContain('db=2026-10-15');
+    expect(fixture.nativeElement.textContent).not.toContain('Mode démonstration');
+  });
 });

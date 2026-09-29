@@ -21,20 +21,12 @@
 
   @if (authOpen()) {
     <div class="auth-overlay" role="presentation" (click)="closeAuth()">
-      <section class="auth-panel" aria-label="Connexion et inscription" (click)="$event.stopPropagation()">
+      <section class="auth-panel" role="dialog" aria-modal="true" aria-label="Connexion et inscription" (click)="$event.stopPropagation()">
         <div class="auth-header">
           <h3>{{ authMode() === 'login' ? 'Connexion sécurisée' : 'Créer votre compte' }}</h3>
           <button type="button" class="auth-close" (click)="closeAuth()">✕</button>
         </div>
-        <div class="auth-social">
-          <button type="button" class="auth-social-btn google" (click)="loginWithProvider('google')">
-            <span class="social-icon" aria-hidden="true">G</span> Continuer avec Google
-          </button>
-          <button type="button" class="auth-social-btn microsoft" (click)="loginWithProvider('microsoft')">
-            <span class="social-icon" aria-hidden="true">⊞</span> Continuer avec Microsoft / Hotmail
-          </button>
-        </div>
-        <div class="auth-divider"><span>ou avec un email</span></div>
+        <p class="auth-description">Connectez-vous avec votre adresse e-mail et votre mot de passe.</p>
         <div class="auth-tabs">
           <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">Connexion</button>
           <button type="button" [class.active]="authMode() === 'register'" (click)="authMode.set('register')">Inscription</button>
@@ -52,7 +44,10 @@
           </label>
           <label>
             <span>Mot de passe</span>
-            <input type="password" name="password" [ngModel]="authPassword()" (ngModelChange)="authPassword.set($event)" required>
+              <input type="password" name="password" [ngModel]="authPassword()" (ngModelChange)="authPassword.set($event)" [minlength]="authMode() === 'register' ? 12 : 1" maxlength="72" [attr.autocomplete]="authMode() === 'login' ? 'current-password' : 'new-password'" required>
+              @if (authMode() === 'register') {
+                <small class="password-hint">12 caractères minimum.</small>
+              }
           </label>
           @if (authError()) {
             <p class="auth-error">{{ authError() }}</p>
@@ -95,6 +90,14 @@
           </span>
         </label>
         <span class="field-divider"></span>
+        <label class="search-field origin-field">
+          <span class="field-icon">⌖</span>
+          <span class="field-content">
+            <span class="field-label">Ville de départ</span>
+            <input name="origin" type="text" placeholder="Ex. Paris" [ngModel]="origin()" (ngModelChange)="origin.set($event)" aria-label="Ville de départ">
+          </span>
+        </label>
+        <span class="field-divider"></span>
         <label class="search-field date-field">
           <span class="field-icon">▦</span>
           <span class="field-content">
@@ -133,13 +136,13 @@
       <div class="partner-strip" role="group" aria-label="Plateformes partenaires">
         <span>Comparer aussi sur :</span>
         @for (partner of visiblePartners(); track partner.id) {
-          <a class="partner-chip" [href]="partner.url" target="_blank" rel="noopener noreferrer">
+          <a class="partner-chip" [href]="partnerSearchUrl(partner)" target="_blank" rel="noopener noreferrer">
             <span class="partner-badge">{{ partner.badge }}</span>
             {{ partner.name }}
           </a>
         }
       </div>
-      <p class="search-note">La recherche se met à jour automatiquement pendant la saisie. Les dates et voyageurs seront pris en compte avec les fournisseurs connectés.</p>
+      <p class="search-note">Les offres affichées sont des exemples. Utilisez les liens partenaires pour vérifier les disponibilités et tarifs du jour.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
@@ -164,10 +167,12 @@
         </label>
       </div>
 
+      @if (hasDemoOffers()) {
       <div class="demo-notice" role="note">
         <span class="notice-icon">i</span>
-        <p><strong>Mode démonstration</strong> — tarifs indicatifs fictifs, sans disponibilité vérifiée. Aucune réservation n’est effectuée.</p>
+        <p><strong>Mode démonstration</strong> — tarifs fictifs, sans disponibilité vérifiée. Aucune réservation n’est effectuée.</p>
       </div>
+      }
 
       @if (errorMessage()) {
         <div class="state-message error-state" role="alert"><span>!</span><p>{{ errorMessage() }}</p><button type="button" (click)="searchOffers()">Réessayer</button></div>
@@ -195,7 +200,7 @@
                   </span>
                   <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.category === 'CAR' ? '/ jour · exemple' : '· exemple' }}</span></div>
                 </div>
-                @if (providerUrl(offer); as url) {
+                @if (offerPartnerSearchUrl(offer); as url) {
                   <a class="offer-action offer-action-link" [href]="url" target="_blank" rel="noopener noreferrer">Voir sur {{ providerDisplayName(offer) }} <span>↗</span></a>
                 } @else {
                   <button class="offer-action" type="button" disabled>Réservation bientôt disponible <span>↗</span></button>

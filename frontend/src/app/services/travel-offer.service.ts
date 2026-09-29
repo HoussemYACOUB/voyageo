@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { Observable } from 'rxjs';
 
-export type OfferCategory = 'HOTEL' | 'FLIGHT' | 'TRAIN' | 'CAR';
+export type OfferCategory = 'HOTEL' | 'FLIGHT' | 'TRAIN' | 'CAR' | 'CARPOOL';
 export type OfferSort = 'price' | 'rating';
 
 export interface TravelOffer {

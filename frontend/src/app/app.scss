@@ -39,6 +39,7 @@
 }
 .auth-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .auth-header h3 { margin: 0; color: #17314b; font: 700 16px/1.2 'Manrope', sans-serif; }
+.auth-description { margin: 8px 0 0; color: #718193; font-size: 11px; line-height: 1.5; }
 .auth-close { border: 0; background: transparent; color: #63758a; font-size: 16px; cursor: pointer; }
 .auth-social { display: grid; gap: 9px; margin-top: 14px; }
 .auth-social-btn {
@@ -67,6 +68,7 @@
 .auth-form { display: grid; gap: 10px; margin-top: 12px; }
 .auth-form label { display: grid; gap: 5px; }
 .auth-form span { color: #6f8091; font-size: 10px; font-weight: 700; }
+.password-hint { color: #81909e; font-size: 10px; }
 .auth-form input {
 	padding: 10px 11px;
 	border: 1px solid #dfe8ef;
@@ -162,6 +164,7 @@
 .offer-art[data-category='FLIGHT'] { background: linear-gradient(130deg, #bed5ef, #7aa5cf); }
 .offer-art[data-category='TRAIN'] { background: linear-gradient(130deg, #f2d8bb, #d9a476); }
 .offer-art[data-category='CAR'] { background: linear-gradient(130deg, #d4c8eb, #a393c5); }
+.offer-art[data-category='CARPOOL'] { background: linear-gradient(130deg, #a8ded1, #55a894); }
 .art-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .offer-art::before, .offer-art::after { content: ''; position: absolute; width: 190px; height: 190px; border: 1px solid #ffffff64; border-radius: 50%; z-index: 1; }
 .offer-art::before { top: -130px; left: -35px; }

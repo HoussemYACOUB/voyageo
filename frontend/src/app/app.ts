@@ -1,5 +1,6 @@
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +32,7 @@ export class App implements OnInit {
   private readonly authService = inject(AuthService);
 
   protected readonly destination = signal('');
+  protected readonly origin = signal('');
   protected readonly departureDate = signal('');
   protected readonly returnDate = signal('');
   protected readonly travelers = signal(2);
@@ -47,7 +49,8 @@ export class App implements OnInit {
     { id: 'HOTEL', label: 'Hébergements', icon: '⌂' },
     { id: 'FLIGHT', label: 'Vols', icon: '✈' },
     { id: 'TRAIN', label: 'Trains', icon: '▤' },
-    { id: 'CAR', label: 'Voitures', icon: '◈' }
+    { id: 'CAR', label: 'Voitures', icon: '◈' },
+    { id: 'CARPOOL', label: 'Covoiturage', icon: '🚙' }
   ];
   protected readonly sortOptions: { id: OfferSort; label: string }[] = [
     { id: 'price', label: 'Prix le plus bas' },
@@ -63,10 +66,10 @@ export class App implements OnInit {
       color: '#003580'
     },
     {
-      id: 'govoyages',
-      name: 'GO Voyages',
-      url: 'https://www.govoyages.com',
-      categories: ['FLIGHT', 'CAR'],
+      id: 'flights',
+      name: 'Google Flights',
+      url: 'https://www.google.com/travel/flights',
+      categories: ['FLIGHT'],
       badge: '🛫',
       color: '#c1175a'
     },
@@ -77,6 +80,14 @@ export class App implements OnInit {
       categories: ['TRAIN'],
       badge: '🚆',
       color: '#0b1641'
+    },
+    {
+      id: 'blablacar',
+      name: 'BlaBlaCar',
+      url: 'https://www.blablacar.fr',
+      categories: ['CARPOOL'],
+      badge: '🚙',
+      color: '#00a88f'
     }
   ];
 
@@ -111,6 +122,7 @@ export class App implements OnInit {
   protected readonly user = this.authService.currentUser;
   protected readonly isAuthenticated = this.authService.isAuthenticated;
   protected readonly userInitial = computed(() => this.user()?.displayName?.charAt(0).toUpperCase() ?? '👤');
+  protected readonly hasDemoOffers = computed(() => this.visibleOffers().some((offer) => offer.demo));
 
   ngOnInit(): void {
     this.authService.bootstrapSession().subscribe({ error: () => undefined });
@@ -191,6 +203,7 @@ export class App implements OnInit {
     FLIGHT: ['1436491865332-7a61a109cc05', '1569154941061-e231b4725ef1', '1544620347-c4fd4a3d5957'],
     TRAIN: ['1517649763962-0c623066013b', '1568605114967-8130f3a36994', '1474487548417-781cb71495f3'],
     CAR: ['1502877338535-766e1452684a', '1449965408869-eaa3f722e40d', '1503376780353-7e6692767b70', '1494905998402-395d579af36f'],
+    CARPOOL: ['1502877338535-766e1452684a', '1449965408869-eaa3f722e40d', '1494905998402-395d579af36f']
   };
 
   protected offerImageUrl(offer: TravelOffer): string {
@@ -244,13 +257,36 @@ export class App implements OnInit {
     this.authError.set('');
   }
 
-  // La connexion sociale necessite un Client ID Google/Microsoft configure cote backend
-  protected loginWithProvider(provider: 'google' | 'microsoft'): void {
-    this.authError.set(
-      provider === 'google'
-        ? 'Connexion Google bientôt disponible : configuration du fournisseur en cours.'
-        : 'Connexion Microsoft/Hotmail bientôt disponible : configuration du fournisseur en cours.'
-    );
+  protected partnerSearchUrl(partner: PartnerSite): string {
+    const origin = this.origin().trim();
+    const destination = this.destination().trim();
+    const departureDate = this.departureDate();
+
+    if (partner.id === 'blablacar' && origin && destination) {
+      const params = new URLSearchParams({ fn: origin, tn: destination });
+      if (departureDate) params.set('db', departureDate);
+      return `https://www.blablacar.fr/search?${params.toString()}`;
+    }
+
+    if (partner.id === 'flights' && origin && destination) {
+      const trip = `Flights from ${origin} to ${destination}`;
+      const dates = departureDate ? ` on ${departureDate}${this.returnDate() ? ` to ${this.returnDate()}` : ''}` : '';
+      return `${partner.url}?q=${encodeURIComponent(`${trip}${dates}`)}&hl=fr&curr=EUR`;
+    }
+
+    if (partner.id === 'booking' && destination) {
+      const params = new URLSearchParams({ ss: destination, group_adults: String(this.travelers()), lang: 'fr' });
+      if (departureDate) params.set('checkin', departureDate);
+      if (this.returnDate()) params.set('checkout', this.returnDate());
+      return `https://www.booking.com/searchresults.html?${params.toString()}`;
+    }
+
+    return partner.url;
+  }
+
+  protected offerPartnerSearchUrl(offer: TravelOffer): string | null {
+    const partner = this.providerSite(offer);
+    return partner ? this.partnerSearchUrl(partner) : null;
   }
 
   protected submitAuth(): void {
@@ -276,9 +312,10 @@ export class App implements OnInit {
         this.authPassword.set('');
         this.authOpen.set(false);
       },
-      error: () => {
+      error: (error: HttpErrorResponse) => {
         this.authLoading.set(false);
-        this.authError.set('Connexion impossible. Vérifiez vos identifiants ou créez un compte.');
+        const message = error.error?.message;
+        this.authError.set(typeof message === 'string' ? message : 'Connexion impossible. Vérifiez vos identifiants ou réessayez.');
       }
     });
   }

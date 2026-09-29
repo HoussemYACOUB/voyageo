@@ -3,6 +3,9 @@ package com.riskboard.backend.auth.security;
 import java.io.IOException;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -45,8 +48,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String email = jwtService.extractSubject(token);
-        UserAccount user = authService.loadByEmail(email);
+        UserAccount user;
+        try {
+            String email = jwtService.extractSubject(token);
+            user = authService.loadByEmail(email);
+        } catch (BadCredentialsException exception) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"message\":\"Session invalide. Veuillez vous reconnecter.\"}");
+            return;
+        }
 
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 user,

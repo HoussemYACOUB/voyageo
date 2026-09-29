@@ -4,5 +4,6 @@ public enum OfferCategory {
     HOTEL,
     FLIGHT,
     TRAIN,
-    CAR
+    CAR,
+    CARPOOL
 }
