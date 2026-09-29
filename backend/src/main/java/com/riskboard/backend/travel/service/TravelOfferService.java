@@ -75,6 +75,7 @@ public class TravelOfferService {
                         String returnDate
         ) {
         String normalizedDestination = normalize(destination);
+                String normalizedCity = normalizedDestination.split(",", 2)[0].trim();
                 List<TravelOffer> source = new ArrayList<>(DEMO_OFFERS);
                 List<TravelOffer> flightOffers = fetchFlightOffers(
                                 destination, originIata, destinationIata, departureDate, returnDate, category);
@@ -85,9 +86,9 @@ public class TravelOfferService {
 
                 return source.stream()
                 .filter(offer -> category == null || offer.category() == category)
-                .filter(offer -> normalizedDestination.isBlank()
-                        || normalize(offer.destination()).contains(normalizedDestination)
-                        || normalize(offer.title()).contains(normalizedDestination))
+                .filter(offer -> normalizedCity.isBlank()
+                        || normalize(offer.destination()).contains(normalizedCity)
+                        || normalize(offer.title()).contains(normalizedCity))
                 .sorted(resolveComparator(sort))
                 .toList();
     }

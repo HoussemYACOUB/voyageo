@@ -31,6 +31,15 @@ class TravelOfferServiceTest {
     }
 
     @Test
+    void matchesAutocompleteCityWithCountrySuffix() {
+        List<TravelOffer> offers = service.search("Lisbonne, Portugal", OfferCategory.FLIGHT);
+
+        assertEquals(1, offers.size());
+        assertEquals("flight-lisbonne-1", offers.getFirst().id());
+        assertTrue(offers.getFirst().demo());
+    }
+
+    @Test
     void filtersByCategoryAndDestinationTogether() {
         List<TravelOffer> offers = service.search("paris", OfferCategory.TRAIN);
 
