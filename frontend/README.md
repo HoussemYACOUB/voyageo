@@ -15,11 +15,13 @@ Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor. L
 2. Dans `frontend/`, installer les dépendances avec `npm ci`, puis lancer `npm start`.
 3. Ouvrir `http://localhost:4200`. L’API de démonstration est `GET /api/offers?destination=Paris`.
 
-## Autocomplétion des villes et Google Flights
+## Suggestions et prix de vols
 
-Les champs de départ et de destination utilisent Google Places Autocomplete via une fonction Netlify; la clé reste côté serveur. Pour activer les suggestions Google, activez Places API (New) dans Google Cloud avec la facturation et une limite de quota, puis définissez `GOOGLE_MAPS_API_KEY` dans les variables d’environnement du site Netlify. Restreignez la clé à Places API. En local, copiez `.env.example` vers `.env` dans `frontend/` et lancez le projet avec `npx netlify-cli dev` pour que la fonction soit disponible. Sans clé, des villes courantes servent de secours.
+Les champs de ville utilisent l’API publique Travelpayouts/Aviasales pour les suggestions et codes IATA; Geoapify peut la remplacer avec `GEOAPIFY_API_KEY` (forfait gratuit annoncé à 3 000 requêtes/jour, sans carte bancaire). Google Places est proposé en dernier recours et demande une clé Google Maps avec facturation. Les clés sont des variables d’environnement Netlify, jamais du code.
 
-Google Flights ne fournit pas d’API publique de recherche de tarifs : Voyageo ouvre une recherche Google Flights préremplie avec les villes et dates choisies. Les cartes de tarifs du site restent des exemples et ne doivent pas être présentées comme des prix live.
+Le backend accepte `TRAVELPAYOUTS_TOKEN` (variable secrète Render) pour demander des tarifs Aviasales pour une route IATA et des dates. L’API Data renvoie des tarifs observés en cache, parfois vieux de 2 à 7 jours: ils sont indicatifs et doivent être revérifiés auprès du partenaire. Sans token, les exemples de vols restent marqués comme démo. Travelpayouts indique ne pas fournir d’API hôtels; les cartes hôtels restent des exemples avec liens partenaires. Google Flights n’a pas d’API publique de tarifs; son lien prérempli est une redirection, pas une comparaison API.
+
+Pour tester les fonctions Netlify en local, copiez `.env.example` vers `.env` dans `frontend/`, puis lancez `npx netlify-cli dev`. Pour les prix Aviasales, configurez `TRAVELPAYOUTS_TOKEN` dans Render.
 
 Pour un appareil physique, remplacer l’URL de l’API dans `src/app/services/travel-offer.service.ts` par une adresse joignable en HTTPS (ou l’adresse IP locale de développement); `localhost` désigne le téléphone dans une application native.
 

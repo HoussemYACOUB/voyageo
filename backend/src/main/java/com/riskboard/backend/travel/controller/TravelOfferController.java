@@ -27,9 +27,13 @@ public class TravelOfferController {
     public List<TravelOffer> search(
             @RequestParam(required = false) String destination,
             @RequestParam(required = false) OfferCategory category,
-            @RequestParam(required = false) String sort
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String originIata,
+            @RequestParam(required = false) String destinationIata,
+            @RequestParam(required = false) String departureDate,
+            @RequestParam(required = false) String returnDate
     ) {
-        return offerService.search(destination, category, sort);
+        return offerService.search(destination, category, sort, originIata, destinationIata, departureDate, returnDate);
     }
 
     @GetMapping("/destinations")

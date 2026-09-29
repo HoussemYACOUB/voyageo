@@ -43,6 +43,22 @@ describe('TravelOfferService', () => {
     request.flush([]);
   });
 
+  it('includes Travelpayouts route codes and dates for a flight search', () => {
+    service.search('Lisbonne, Portugal', 'FLIGHT', 'price', {
+      originIata: 'PAR',
+      destinationIata: 'LIS',
+      departureDate: '2026-11-15',
+      returnDate: '2026-11-22'
+    }).subscribe();
+
+    const request = http.expectOne((candidate) => candidate.url === 'http://localhost:8080/api/offers');
+    expect(request.request.params.get('originIata')).toBe('PAR');
+    expect(request.request.params.get('destinationIata')).toBe('LIS');
+    expect(request.request.params.get('departureDate')).toBe('2026-11-15');
+    expect(request.request.params.get('returnDate')).toBe('2026-11-22');
+    request.flush([]);
+  });
+
   it('fetches the list of destination suggestions', () => {
     service.destinations().subscribe((destinations) => expect(destinations).toEqual(['Lyon', 'Paris']));
 

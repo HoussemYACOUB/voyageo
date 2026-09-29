@@ -118,6 +118,7 @@
 .autocomplete-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: max(100%, 250px); max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid #e4ebef; border-radius: 12px; background: #fff; box-shadow: 0 14px 30px #17253620; }
 .autocomplete-option { display: block; width: 100%; padding: 10px 11px; border: 0; border-radius: 8px; background: transparent; color: #34495a; text-align: left; font-size: 12px; cursor: pointer; }
 .autocomplete-option:hover, .autocomplete-option:focus-visible { outline: 0; background: #edf7f4; color: #14796e; }
+.iata-code { float: right; color: #89939e; font-size: 10px; font-weight: 700; }
 .google-maps-attribution { padding: 5px 10px 4px; border-top: 1px solid #edf0f2; color: #5e5e5e; font-family: Roboto, Arial, sans-serif; font-size: 12px; font-weight: 400; white-space: nowrap; }
 .search-field { display: flex; flex: 1; align-items: center; min-width: 0; gap: 10px; padding: 6px 11px; }
 .destination-field { flex: 1.3; }

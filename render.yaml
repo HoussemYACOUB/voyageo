@@ -10,3 +10,5 @@ services:
         sync: false
       - key: JWT_EXPIRATION_SECONDS
         value: "86400"
+      - key: TRAVELPAYOUTS_TOKEN
+        sync: false

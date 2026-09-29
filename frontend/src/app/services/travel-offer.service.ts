@@ -17,12 +17,22 @@ export interface TravelOffer {
   details: string;
   rating: number;
   demo: boolean;
+  bookingUrl?: string | null;
 }
 
 export interface CitySuggestion {
   text: string;
   placeId?: string;
-  provider?: 'google' | 'fallback';
+  iataCode?: string;
+  type?: 'city' | 'airport';
+  provider?: 'google' | 'geoapify' | 'travelpayouts' | 'fallback';
+}
+
+export interface FlightSearchRoute {
+  originIata: string;
+  destinationIata: string;
+  departureDate: string;
+  returnDate?: string;
 }
 
 // En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
@@ -53,11 +63,18 @@ export class TravelOfferService {
   private readonly endpoint = resolveApiBaseUrl();
   private readonly autocompleteEndpoint = resolveAutocompleteUrl();
 
-  search(destination: string, category?: OfferCategory, sort?: OfferSort): Observable<TravelOffer[]> {
+  search(destination: string, category?: OfferCategory, sort?: OfferSort, route?: FlightSearchRoute): Observable<TravelOffer[]> {
     let params = new HttpParams();
     if (destination) params = params.set('destination', destination);
     if (category) params = params.set('category', category);
     if (sort) params = params.set('sort', sort);
+    if (route) {
+      params = params
+        .set('originIata', route.originIata)
+        .set('destinationIata', route.destinationIata)
+        .set('departureDate', route.departureDate);
+      if (route.returnDate) params = params.set('returnDate', route.returnDate);
+    }
     return this.http.get<TravelOffer[]>(this.endpoint, { params });
   }
 

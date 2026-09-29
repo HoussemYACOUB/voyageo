@@ -6,7 +6,7 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, of, skip, switchMap } from 'rxjs';
 import { AuthService } from './services/auth.service';
-import { CitySuggestion, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
+import { CitySuggestion, FlightSearchRoute, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 type CategoryFilter = 'ALL' | OfferCategory;
 
@@ -33,6 +33,8 @@ export class App implements OnInit {
 
   protected readonly destination = signal('');
   protected readonly origin = signal('');
+  protected readonly originIata = signal('');
+  protected readonly destinationIata = signal('');
   protected readonly departureDate = signal('');
   protected readonly returnDate = signal('');
   protected readonly travelers = signal(2);
@@ -74,6 +76,14 @@ export class App implements OnInit {
       categories: ['FLIGHT'],
       badge: '🛫',
       color: '#c1175a'
+    },
+    {
+      id: 'aviasales',
+      name: 'Aviasales',
+      url: 'https://www.aviasales.com',
+      categories: ['FLIGHT'],
+      badge: '✈',
+      color: '#e84b39'
     },
     {
       id: 'sncf',
@@ -155,21 +165,24 @@ export class App implements OnInit {
 
   protected selectOriginSuggestion(suggestion: CitySuggestion): void {
     this.origin.set(suggestion.text);
+    this.originIata.set(suggestion.iataCode ?? '');
     this.originAutocompleteSuggestions.set([]);
   }
 
   protected selectDestinationSuggestion(suggestion: CitySuggestion): void {
     this.destination.set(suggestion.text);
+    this.destinationIata.set(suggestion.iataCode ?? '');
     this.destinationAutocompleteSuggestions.set([]);
-    this.searchOffers();
   }
 
   protected updateOrigin(value: string): void {
+    if (value !== this.origin()) this.originIata.set('');
     this.origin.set(value);
     if (value.trim().length < 2) this.originAutocompleteSuggestions.set([]);
   }
 
   protected updateDestination(value: string): void {
+    if (value !== this.destination()) this.destinationIata.set('');
     this.destination.set(value);
     if (value.trim().length < 2) this.destinationAutocompleteSuggestions.set([]);
   }
@@ -178,8 +191,18 @@ export class App implements OnInit {
     this.loading.set(true);
     this.errorMessage.set('');
     const category = this.activeCategory();
-    this.offerService
-      .search(this.destination().trim(), category === 'ALL' ? undefined : category, this.sortBy())
+    const route: FlightSearchRoute | undefined = this.originIata() && this.destinationIata() && this.departureDate()
+      ? {
+          originIata: this.originIata(),
+          destinationIata: this.destinationIata(),
+          departureDate: this.departureDate(),
+          returnDate: this.returnDate() || undefined
+        }
+      : undefined;
+    const request = route
+      ? this.offerService.search(this.destination().trim(), category === 'ALL' ? undefined : category, this.sortBy(), route)
+      : this.offerService.search(this.destination().trim(), category === 'ALL' ? undefined : category, this.sortBy());
+    request
       .subscribe({
         next: (offers) => {
           this.offers.set(offers);
@@ -306,8 +329,10 @@ export class App implements OnInit {
     }
 
     if (partner.id === 'flights' && origin && destination) {
+      const flightOrigin = this.originIata() || origin;
+      const flightDestination = this.destinationIata() || destination;
       const query = new URLSearchParams({
-        q: `Flights from ${origin} to ${destination}${departureDate ? ` on ${departureDate}` : ''}${this.returnDate() ? ` to ${this.returnDate()}` : ''}`,
+        q: `Flights from ${flightOrigin} to ${flightDestination}${departureDate ? ` on ${departureDate}` : ''}${this.returnDate() ? ` to ${this.returnDate()}` : ''}`,
         hl: 'fr',
         curr: 'EUR'
       });
@@ -325,6 +350,7 @@ export class App implements OnInit {
   }
 
   protected offerPartnerSearchUrl(offer: TravelOffer): string | null {
+    if (offer.bookingUrl?.startsWith('https://www.aviasales.com/')) return offer.bookingUrl;
     const partner = this.providerSite(offer);
     return partner ? this.partnerSearchUrl(partner) : null;
   }

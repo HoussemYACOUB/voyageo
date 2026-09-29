@@ -88,10 +88,14 @@
           @if (destinationAutocompleteSuggestions().length > 0) {
             <div class="autocomplete-menu" id="destination-city-options" role="listbox" aria-label="Suggestions de destination">
               @for (suggestion of destinationAutocompleteSuggestions(); track suggestion.placeId ?? suggestion.text) {
-                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectDestinationSuggestion(suggestion)">{{ suggestion.text }}</button>
+                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectDestinationSuggestion(suggestion)">{{ suggestion.text }} @if (suggestion.iataCode) { <span class="iata-code">{{ suggestion.iataCode }}</span> }</button>
               }
               @if (destinationAutocompleteSuggestions()[0]?.provider === 'google') {
                 <div class="google-maps-attribution" translate="no">Google Maps</div>
+              } @else if (destinationAutocompleteSuggestions()[0]?.provider === 'geoapify') {
+                <div class="google-maps-attribution"><a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a> · © OpenStreetMap contributors</div>
+              } @else if (destinationAutocompleteSuggestions()[0]?.provider === 'travelpayouts') {
+                <div class="google-maps-attribution">Villes et aéroports · Aviasales</div>
               }
             </div>
           }
@@ -108,10 +112,14 @@
           @if (originAutocompleteSuggestions().length > 0) {
             <div class="autocomplete-menu" id="origin-city-options" role="listbox" aria-label="Suggestions de ville de départ">
               @for (suggestion of originAutocompleteSuggestions(); track suggestion.placeId ?? suggestion.text) {
-                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectOriginSuggestion(suggestion)">{{ suggestion.text }}</button>
+                <button type="button" role="option" class="autocomplete-option" (mousedown)="$event.preventDefault()" (click)="selectOriginSuggestion(suggestion)">{{ suggestion.text }} @if (suggestion.iataCode) { <span class="iata-code">{{ suggestion.iataCode }}</span> }</button>
               }
               @if (originAutocompleteSuggestions()[0]?.provider === 'google') {
                 <div class="google-maps-attribution" translate="no">Google Maps</div>
+              } @else if (originAutocompleteSuggestions()[0]?.provider === 'geoapify') {
+                <div class="google-maps-attribution"><a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a> · © OpenStreetMap contributors</div>
+              } @else if (originAutocompleteSuggestions()[0]?.provider === 'travelpayouts') {
+                <div class="google-maps-attribution">Villes et aéroports · Aviasales</div>
               }
             </div>
           }
@@ -161,7 +169,7 @@
           </a>
         }
       </div>
-      <p class="search-note">Les offres affichées sont des exemples. Utilisez les liens partenaires pour vérifier les disponibilités et tarifs du jour.</p>
+      <p class="search-note">Les offres de vol Aviasales proviennent de données de recherche en cache et doivent être revérifiées. Les tarifs de démonstration ne sont pas réservables.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
@@ -210,14 +218,14 @@
                 <button class="save-button" type="button" [attr.aria-label]="isFavorite(offer.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'" [attr.aria-pressed]="isFavorite(offer.id)" (click)="toggleFavorite(offer.id)">{{ isFavorite(offer.id) ? '♥' : '♡' }}</button>
               </div>
               <div class="offer-content">
-                <div class="offer-title-row"><div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div><span class="rating">★ {{ offer.rating | number:'1.1-1' }}</span></div>
+                <div class="offer-title-row"><div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div>@if (offer.rating > 0) { <span class="rating">★ {{ offer.rating | number:'1.1-1' }}</span> }</div>
                 <p class="offer-details">{{ offer.details }}</p>
                 <div class="offer-footer">
                   <span class="provider">
                     <span class="provider-badge" [style.background]="providerColor(offer)">{{ providerBadge(offer) }}</span>
                     {{ providerDisplayName(offer) }}
                   </span>
-                  <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.category === 'CAR' ? '/ jour · exemple' : '· exemple' }}</span></div>
+                  <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.demo ? (offer.category === 'CAR' ? '/ jour · exemple' : '· exemple') : '· cache à revérifier' }}</span></div>
                 </div>
                 @if (offerPartnerSearchUrl(offer); as url) {
                   <a class="offer-action offer-action-link" [href]="url" target="_blank" rel="noopener noreferrer">Voir sur {{ providerDisplayName(offer) }} <span>↗</span></a>
@@ -233,9 +241,9 @@
 
     <section class="bottom-banner" aria-label="Prix minimum">
       <div class="banner-icon">✦</div><div><strong>Le meilleur prix, sans perdre le plaisir.</strong><span>Comparez les options en un clin d’œil, et gardez vos coups de cœur.</span></div>
-      <span class="banner-price" *ngIf="lowestPrice() !== null">Dès {{ lowestPrice() | currency:'EUR':'symbol':'1.0-0':'fr-FR' }} <small>tarif démo</small></span>
+      <span class="banner-price" *ngIf="lowestPrice() !== null">Dès {{ lowestPrice() | currency:'EUR':'symbol':'1.0-0':'fr-FR' }} <small>{{ visibleOffers()[0]?.demo ? 'tarif démo' : 'prix indicatif' }}</small></span>
     </section>
   </main>
 
-  <footer class="site-footer"><span>© 2026 Voyageo · Fait pour les envies d’ailleurs.</span><span>Tarifs de démonstration uniquement</span></footer>
+  <footer class="site-footer"><span>© 2026 Voyageo · Fait pour les envies d’ailleurs.</span><span>Prix Aviasales indicatifs issus du cache; offres démo non réservables.</span></footer>
 </div>
