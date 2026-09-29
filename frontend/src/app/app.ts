@@ -6,7 +6,7 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, of, skip, switchMap } from 'rxjs';
 import { AuthService } from './services/auth.service';
-import { CitySuggestion, FlightSearchRoute, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
+import { CitySuggestion, FlightSearchRoute, HotelSearchCriteria, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 type CategoryFilter = 'ALL' | OfferCategory;
 
@@ -68,6 +68,14 @@ export class App implements OnInit {
       categories: ['HOTEL'],
       badge: '🏨',
       color: '#003580'
+    },
+    {
+      id: 'google-hotels',
+      name: 'Google Hotels',
+      url: 'https://www.google.com/travel/hotels',
+      categories: ['HOTEL'],
+      badge: '🔎',
+      color: '#4285f4'
     },
     {
       id: 'flights',
@@ -199,17 +207,31 @@ export class App implements OnInit {
           returnDate: this.returnDate() || undefined
         }
       : undefined;
-    const request = route
-      ? this.offerService.search(this.destination().trim(), category === 'ALL' ? undefined : category, this.sortBy(), route)
-      : this.offerService.search(this.destination().trim(), category === 'ALL' ? undefined : category, this.sortBy());
+    const hotel: HotelSearchCriteria | undefined = category === 'HOTEL' && this.departureDate() && this.returnDate()
+      ? { checkIn: this.departureDate(), checkOut: this.returnDate(), adults: this.travelers() }
+      : undefined;
+    const query = this.destination().trim();
+    const selectedCategory = category === 'ALL' ? undefined : category;
+    const request = hotel
+      ? this.offerService.search(query, selectedCategory, this.sortBy(), route, hotel)
+      : route
+        ? this.offerService.search(query, selectedCategory, this.sortBy(), route)
+        : this.offerService.search(query, selectedCategory, this.sortBy());
     request
       .subscribe({
         next: (offers) => {
           this.offers.set(offers);
           this.loading.set(false);
         },
-        error: () => {
-          this.errorMessage.set('Impossible de charger les offres. Vérifiez que le serveur est démarré.');
+        error: (error: HttpErrorResponse) => {
+          const providerMessage = error.error?.detail ?? error.error?.message;
+          if (category === 'HOTEL' && error.status === 503) {
+            this.errorMessage.set(typeof providerMessage === 'string'
+              ? providerMessage
+              : 'Accès Booking refusé : activez le forfait Basic gratuit Booking COM dans RapidAPI et vérifiez RAPIDAPI_KEY côté backend (50 appels API/mois, environ 25 recherches).');
+          } else {
+            this.errorMessage.set('Impossible de charger les offres. Vérifiez que le serveur est démarré.');
+          }
           this.loading.set(false);
         }
       });
@@ -339,8 +361,27 @@ export class App implements OnInit {
       return `${partner.url}?${query.toString()}`;
     }
 
+    if (partner.id === 'google-hotels' && destination) {
+      const params = new URLSearchParams({
+        q: `Hôtels à ${destination}`,
+        hl: 'fr',
+        gl: 'fr',
+        curr: 'EUR',
+        adults: String(this.travelers())
+      });
+      if (departureDate) params.set('checkin', departureDate);
+      if (this.returnDate()) params.set('checkout', this.returnDate());
+      return `${partner.url}?${params.toString()}`;
+    }
+
     if (partner.id === 'booking' && destination) {
-      const params = new URLSearchParams({ ss: destination, group_adults: String(this.travelers()), lang: 'fr' });
+      const params = new URLSearchParams({
+        ss: destination,
+        group_adults: String(this.travelers()),
+        group_children: '0',
+        no_rooms: '1',
+        lang: 'fr'
+      });
       if (departureDate) params.set('checkin', departureDate);
       if (this.returnDate()) params.set('checkout', this.returnDate());
       return `https://www.booking.com/searchresults.html?${params.toString()}`;

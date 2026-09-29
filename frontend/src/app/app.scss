@@ -200,6 +200,10 @@
 .state-message { display: flex; min-height: 175px; justify-content: center; align-items: center; gap: 13px; padding: 30px; border: 1px dashed #d9e1e5; border-radius: 14px; background: #fff; color: #687985; }
 .state-message > span:not(.loader) { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #eaf7f4; color: #168c7e; font-weight: 700; }
 .state-message p { font-size: 13px; }
+.hotel-search-state { justify-content: flex-start; }
+.hotel-search-state p { margin: 0 0 12px; }
+.hotel-search-links { display: flex; flex-wrap: wrap; gap: 9px; width: min(460px, 100%); }
+.hotel-search-links .offer-action { width: auto; min-width: 190px; flex: 1; cursor: pointer; }
 .error-state { border-color: #f0c5c1; color: #9e4940; }
 .error-state > span:not(.loader) { background: #fff0ee; color: #ae5146; }
 .error-state button { padding: 8px 12px; border: 1px solid #e8b7b1; border-radius: 7px; background: white; color: #98483f; font-size: 11px; }

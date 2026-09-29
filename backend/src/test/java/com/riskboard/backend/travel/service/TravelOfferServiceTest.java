@@ -17,7 +17,7 @@ class TravelOfferServiceTest {
     void returnsAllDemoOffersCheapestFirstWhenNoFiltersAreProvided() {
         List<TravelOffer> offers = service.search(null, null);
 
-        assertEquals(11, offers.size());
+        assertEquals(7, offers.size());
         assertEquals("24.00", offers.getFirst().price().toPlainString());
         assertTrue(offers.stream().allMatch(TravelOffer::demo));
     }
@@ -26,7 +26,7 @@ class TravelOfferServiceTest {
     void filtersDestinationWithoutBeingCaseOrAccentSensitive() {
         List<TravelOffer> offers = service.search("lisbONNe", null);
 
-        assertEquals(2, offers.size());
+        assertEquals(1, offers.size());
         assertTrue(offers.stream().allMatch(offer -> offer.destination().equals("Lisbonne")));
     }
 
@@ -37,6 +37,11 @@ class TravelOfferServiceTest {
         assertEquals(1, offers.size());
         assertEquals("flight-lisbonne-1", offers.getFirst().id());
         assertTrue(offers.getFirst().demo());
+    }
+
+    @Test
+    void doesNotPresentInventedHotelPricesAsOffers() {
+        assertTrue(service.search("Paris", OfferCategory.HOTEL).isEmpty());
     }
 
     @Test
@@ -56,8 +61,8 @@ class TravelOfferServiceTest {
     void sortsByRatingDescendingWhenRequested() {
         List<TravelOffer> offers = service.search(null, null, "rating");
 
-        assertEquals("hotel-lisbonne-1", offers.getFirst().id());
-        assertEquals("4.8", offers.getFirst().rating().toPlainString());
+        assertEquals("train-paris-1", offers.getFirst().id());
+        assertEquals("4.6", offers.getFirst().rating().toPlainString());
     }
 
     @Test

@@ -7,7 +7,6 @@ import { AuthService } from './services/auth.service';
 import { TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 const demoOffers: TravelOffer[] = [
-  { id: 'stay-paris', category: 'HOTEL', title: 'Hôtel Paris', destination: 'Paris', provider: 'Démo', price: 119, currency: 'EUR', details: 'Centre-ville', rating: 4.5, demo: true },
   { id: 'train-paris', category: 'TRAIN', title: 'Lyon → Paris', destination: 'Paris', provider: 'Démo', price: 39, currency: 'EUR', details: 'Grande vitesse', rating: 4.6, demo: true },
   { id: 'flight-rome', category: 'FLIGHT', title: 'Paris → Rome', destination: 'Rome', provider: 'Démo', price: 104, currency: 'EUR', details: 'Vol direct', rating: 4.4, demo: true }
 ];
@@ -49,16 +48,16 @@ describe('App', () => {
     fixture.detectChanges();
   });
 
-  it('loads and presents demonstration offers from the service', () => {
+  it('loads demonstration offers without inventing hotel prices', () => {
     expect(service.search).toHaveBeenCalledWith('', undefined, 'price');
     expect(fixture.nativeElement.textContent).toContain('Mode démonstration');
-    expect(fixture.nativeElement.textContent).toContain('Hôtel Paris');
+    expect(fixture.nativeElement.textContent).not.toContain('Hôtel Paris');
   });
 
   it('displays offers in ascending price order', () => {
     const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card h3') as NodeListOf<HTMLElement>)
       .map((heading) => heading.textContent?.trim());
-    expect(titles).toEqual(['Lyon → Paris', 'Paris → Rome', 'Hôtel Paris']);
+    expect(titles).toEqual(['Lyon → Paris', 'Paris → Rome']);
   });
 
   it('filters offers by selected category', () => {
@@ -140,5 +139,37 @@ describe('App', () => {
     expect(partnerLink.getAttribute('href')).toContain('tn=Lyon');
     expect(partnerLink.getAttribute('href')).toContain('db=2026-10-15');
     expect(fixture.nativeElement.textContent).not.toContain('Mode démonstration');
+  });
+
+  it('opens partner hotel searches with destination, dates, and traveler count', () => {
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Lisbonne, Portugal';
+    destination.dispatchEvent(new Event('input'));
+    const departure = fixture.nativeElement.querySelector('input[name="departure"]') as HTMLInputElement;
+    departure.value = '2026-10-15';
+    departure.dispatchEvent(new Event('input'));
+    const returnDate = fixture.nativeElement.querySelector('input[name="return"]') as HTMLInputElement;
+    returnDate.value = '2026-10-22';
+    returnDate.dispatchEvent(new Event('input'));
+    const travelers = fixture.nativeElement.querySelector('select[name="travelers"]') as HTMLSelectElement;
+    travelers.selectedIndex = 2;
+    travelers.dispatchEvent(new Event('change'));
+
+    const hotelFilter = Array.from(fixture.nativeElement.querySelectorAll('.category-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Hébergements'));
+    hotelFilter?.click();
+    fixture.detectChanges();
+
+    const partnerLinks = Array.from(fixture.nativeElement.querySelectorAll('.hotel-search-links a') as NodeListOf<HTMLAnchorElement>);
+    expect(partnerLinks).toHaveLength(2);
+    const bookingUrl = new URL(partnerLinks.find((link) => link.textContent?.includes('Booking.com'))!.href);
+    expect(bookingUrl.searchParams.get('ss')).toBe('Lisbonne, Portugal');
+    expect(bookingUrl.searchParams.get('checkin')).toBe('2026-10-15');
+    expect(bookingUrl.searchParams.get('checkout')).toBe('2026-10-22');
+    expect(bookingUrl.searchParams.get('group_adults')).toBe('3');
+    const googleHotelsUrl = new URL(partnerLinks.find((link) => link.textContent?.includes('Google Hotels'))!.href);
+    expect(googleHotelsUrl.searchParams.get('q')).toContain('Lisbonne, Portugal');
+    expect(googleHotelsUrl.searchParams.get('adults')).toBe('3');
+    expect(fixture.nativeElement.textContent).toContain('disponibilités');
   });
 });

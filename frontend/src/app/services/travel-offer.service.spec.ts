@@ -59,6 +59,20 @@ describe('TravelOfferService', () => {
     request.flush([]);
   });
 
+  it('includes hotel dates and guest count for a hotel search', () => {
+    service.search('Lisbonne, Portugal', 'HOTEL', 'price', undefined, {
+      checkIn: '2026-11-15',
+      checkOut: '2026-11-22',
+      adults: 3
+    }).subscribe();
+
+    const request = http.expectOne((candidate) => candidate.url === 'http://localhost:8080/api/offers');
+    expect(request.request.params.get('hotelCheckIn')).toBe('2026-11-15');
+    expect(request.request.params.get('hotelCheckOut')).toBe('2026-11-22');
+    expect(request.request.params.get('adults')).toBe('3');
+    request.flush([]);
+  });
+
   it('fetches the list of destination suggestions', () => {
     service.destinations().subscribe((destinations) => expect(destinations).toEqual(['Lyon', 'Paris']));
 

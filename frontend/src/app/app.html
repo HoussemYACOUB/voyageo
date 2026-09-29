@@ -169,7 +169,7 @@
           </a>
         }
       </div>
-      <p class="search-note">Les offres de vol Aviasales proviennent de données de recherche en cache et doivent être revérifiées. Les tarifs de démonstration ne sont pas réservables.</p>
+      <p class="search-note">Les tarifs d’hôtels sont recherchés chez Booking.com pour vos dates et voyageurs ; ils peuvent évoluer. Le forfait gratuit RapidAPI autorise 50 appels par mois, soit environ 25 recherches complètes. Les prix Aviasales restent indicatifs et les offres de démonstration ne sont pas réservables.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
@@ -206,7 +206,29 @@
       } @else if (loading() && offers().length === 0) {
         <div class="state-message" role="status"><span class="loader"></span><p>On prépare de belles idées pour vous…</p></div>
       } @else if (visibleOffers().length === 0) {
-        <div class="state-message"><span>⌖</span><p>Aucune offre pour cette destination. Essayez une autre ville.</p></div>
+        @if (activeCategory() === 'HOTEL') {
+          <div class="state-message hotel-search-state">
+            <span>⌂</span>
+            <div>
+              @if (destination().trim()) {
+                @if (!departureDate() || !returnDate()) {
+                  <p>Renseignez les dates de départ et de retour pour consulter les vrais tarifs et disponibilités pour {{ destination() }}.</p>
+                } @else {
+                  <p>Aucun tarif trouvé pour {{ destination() }} à ces dates. Vérifiez les disponibilités directement chez nos partenaires.</p>
+                }
+                <div class="hotel-search-links">
+                  @for (partner of visiblePartners(); track partner.id) {
+                    <a class="offer-action offer-action-link" [href]="partnerSearchUrl(partner)" target="_blank" rel="noopener noreferrer">Rechercher sur {{ partner.name }} <span>↗</span></a>
+                  }
+                </div>
+              } @else {
+                <p>Saisissez une destination pour rechercher des hôtels chez nos partenaires.</p>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="state-message"><span>⌖</span><p>Aucune offre pour cette destination. Essayez une autre ville.</p></div>
+        }
       } @else {
         <div class="offer-grid">
           @for (offer of visibleOffers(); track offer.id) {
@@ -225,7 +247,7 @@
                     <span class="provider-badge" [style.background]="providerColor(offer)">{{ providerBadge(offer) }}</span>
                     {{ providerDisplayName(offer) }}
                   </span>
-                  <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }}</strong><span>{{ offer.demo ? (offer.category === 'CAR' ? '/ jour · exemple' : '· exemple') : '· cache à revérifier' }}</span></div>
+                  <div class="price"><strong>{{ offer.price | currency:offer.currency:'symbol':(offer.category === 'HOTEL' ? '1.2-2' : '1.0-0'):'fr-FR' }}</strong><span>{{ offer.demo ? (offer.category === 'CAR' ? '/ jour · exemple' : '· exemple') : offer.category === 'HOTEL' ? '· séjour · à revérifier' : '· cache à revérifier' }}</span></div>
                 </div>
                 @if (offerPartnerSearchUrl(offer); as url) {
                   <a class="offer-action offer-action-link" [href]="url" target="_blank" rel="noopener noreferrer">Voir sur {{ providerDisplayName(offer) }} <span>↗</span></a>

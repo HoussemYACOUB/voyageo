@@ -12,3 +12,9 @@ services:
         value: "86400"
       - key: TRAVELPAYOUTS_TOKEN
         sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: BOOKING_API_HOST
+        value: booking-com15.p.rapidapi.com
+      - key: BOOKING_API_BASE_URL
+        value: https://booking-com15.p.rapidapi.com

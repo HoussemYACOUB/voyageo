@@ -35,6 +35,12 @@ export interface FlightSearchRoute {
   returnDate?: string;
 }
 
+export interface HotelSearchCriteria {
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+}
+
 // En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
 function resolveApiBaseUrl(): string {
   if (Capacitor.isNativePlatform()) {
@@ -63,7 +69,7 @@ export class TravelOfferService {
   private readonly endpoint = resolveApiBaseUrl();
   private readonly autocompleteEndpoint = resolveAutocompleteUrl();
 
-  search(destination: string, category?: OfferCategory, sort?: OfferSort, route?: FlightSearchRoute): Observable<TravelOffer[]> {
+  search(destination: string, category?: OfferCategory, sort?: OfferSort, route?: FlightSearchRoute, hotel?: HotelSearchCriteria): Observable<TravelOffer[]> {
     let params = new HttpParams();
     if (destination) params = params.set('destination', destination);
     if (category) params = params.set('category', category);
@@ -74,6 +80,12 @@ export class TravelOfferService {
         .set('destinationIata', route.destinationIata)
         .set('departureDate', route.departureDate);
       if (route.returnDate) params = params.set('returnDate', route.returnDate);
+    }
+    if (hotel) {
+      params = params
+        .set('hotelCheckIn', hotel.checkIn)
+        .set('hotelCheckOut', hotel.checkOut)
+        .set('adults', hotel.adults);
     }
     return this.http.get<TravelOffer[]>(this.endpoint, { params });
   }

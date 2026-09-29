@@ -3,44 +3,68 @@ package com.riskboard.backend.travel.service;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import com.riskboard.backend.travel.model.OfferCategory;
 import com.riskboard.backend.travel.model.TravelOffer;
 
 @Service
 public class TravelOfferService {
 
-        private final RestClient restClient = RestClient.create();
-        private final ObjectMapper objectMapper = new ObjectMapper();
+        private static final String BOOKING_DESTINATION_PATH = "/api/v1/hotels/searchDestination";
+        private static final String BOOKING_HOTELS_PATH = "/api/v1/hotels/searchHotels";
 
-        @Value("${providers.travelpayouts.token:}")
-        private String travelPayoutsToken;
+        private final RestClient restClient;
+        private final ObjectMapper objectMapper = new ObjectMapper();
+        private final String travelPayoutsToken;
+        private final String bookingApiBaseUrl;
+        private final String rapidApiKey;
+        private final String rapidApiHost;
+        private final ConcurrentMap<String, CachedHotelOffers> hotelSearchCache = new ConcurrentHashMap<>();
+
+        private record CachedHotelOffers(Instant expiresAt, List<TravelOffer> offers) {}
+
+        @Autowired
+        TravelOfferService(
+                        RestClient.Builder restClientBuilder,
+                        @Value("${providers.travelpayouts.token:}") String travelPayoutsToken,
+                        @Value("${providers.booking.base-url:https://booking-com15.p.rapidapi.com}") String bookingApiBaseUrl,
+                        @Value("${providers.booking.rapidapi-key:}") String rapidApiKey,
+                        @Value("${providers.booking.rapidapi-host:booking-com15.p.rapidapi.com}") String rapidApiHost
+        ) {
+                this.restClient = restClientBuilder.build();
+                this.travelPayoutsToken = travelPayoutsToken;
+                this.bookingApiBaseUrl = normalizeBaseUrl(bookingApiBaseUrl);
+                this.rapidApiKey = rapidApiKey;
+                this.rapidApiHost = rapidApiHost;
+        }
+
+        TravelOfferService() {
+                this(RestClient.builder(), "", "", "", "");
+        }
 
     private static final List<TravelOffer> DEMO_OFFERS = List.of(
-            offer("hotel-paris-1", OfferCategory.HOTEL, "Hôtel des Arts", "Paris", "Séjour démo",
-                    "Quartier Montmartre · petit-déjeuner", "4.7", "119.00"),
-            offer("hotel-paris-2", OfferCategory.HOTEL, "Maison Rivoli", "Paris", "Séjour démo",
-                    "Centre-ville · annulation flexible", "4.5", "146.00"),
-            offer("hotel-lyon-1", OfferCategory.HOTEL, "Le Jardin Lyonnais", "Lyon", "Séjour démo",
-                    "Presqu’île · proche du métro", "4.6", "98.00"),
-            offer("hotel-lisbonne-1", OfferCategory.HOTEL, "Casa Alfama", "Lisbonne", "Séjour démo",
-                    "Alfama · terrasse ensoleillée", "4.8", "82.00"),
             offer("flight-lisbonne-1", OfferCategory.FLIGHT, "Paris → Lisbonne", "Lisbonne", "Vol démo",
                     "Vol direct · aller simple", "4.3", "89.00"),
             offer("flight-rome-1", OfferCategory.FLIGHT, "Paris → Rome", "Rome", "Vol démo",
@@ -74,8 +98,29 @@ public class TravelOfferService {
                         String departureDate,
                         String returnDate
         ) {
+                return search(destination, category, sort, originIata, destinationIata, departureDate, returnDate,
+                                null, null, null);
+        }
+
+        public List<TravelOffer> search(
+                        String destination,
+                        OfferCategory category,
+                        String sort,
+                        String originIata,
+                        String destinationIata,
+                        String departureDate,
+                        String returnDate,
+                        String hotelCheckIn,
+                        String hotelCheckOut,
+                        Integer adults
+        ) {
         String normalizedDestination = normalize(destination);
                 String normalizedCity = normalizedDestination.split(",", 2)[0].trim();
+                if (category == OfferCategory.HOTEL) {
+                        return fetchHotelOffers(destination, hotelCheckIn, hotelCheckOut, adults).stream()
+                                        .sorted(resolveComparator(sort))
+                                        .toList();
+                }
                 List<TravelOffer> source = new ArrayList<>(DEMO_OFFERS);
                 List<TravelOffer> flightOffers = fetchFlightOffers(
                                 destination, originIata, destinationIata, departureDate, returnDate, category);
@@ -187,6 +232,187 @@ public class TravelOfferService {
                         // Le catalogue de démonstration reste disponible si le fournisseur est absent ou indisponible.
                         return List.of();
                 }
+        }
+
+        private List<TravelOffer> fetchHotelOffers(String destination, String checkIn, String checkOut, Integer adults) {
+                if (!hasText(destination) || !isValidTravelDate(checkIn) || !isValidTravelDate(checkOut)
+                                || !LocalDate.parse(checkOut).isAfter(LocalDate.parse(checkIn))) {
+                        return List.of();
+                }
+                if (!hasText(rapidApiKey) || !hasText(rapidApiHost)) {
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                        "Ajoutez RAPIDAPI_KEY au backend et activez le forfait Basic gratuit Booking COM dans RapidAPI.");
+                }
+                int guestCount = adults == null ? 2 : adults;
+                if (guestCount < 1 || guestCount > 6) return List.of();
+                String cacheKey = normalize(destination) + "|" + checkIn + "|" + checkOut + "|" + guestCount;
+                CachedHotelOffers cached = hotelSearchCache.get(cacheKey);
+                if (cached != null && cached.expiresAt().isAfter(Instant.now())) return cached.offers();
+
+                try {
+                        JsonNode destinationResponse = getBookingApiResponse(
+                                        UriComponentsBuilder.fromUriString(bookingApiBaseUrl + BOOKING_DESTINATION_PATH)
+                                                        .queryParam("query", destination)
+                                                        .build().encode().toUri());
+                        JsonNode destinationResult = selectDestination(destinationResponse.path("data"), destination);
+                        if (destinationResult == null || !destinationResult.hasNonNull("dest_id")) return List.of();
+
+                        String searchType = destinationResult.path("search_type").asText("CITY");
+                        JsonNode hotelsResponse = getBookingApiResponse(
+                                        UriComponentsBuilder.fromUriString(bookingApiBaseUrl + BOOKING_HOTELS_PATH)
+                                                        .queryParam("dest_id", destinationResult.path("dest_id").asText())
+                                                        .queryParam("search_type", searchType)
+                                                        .queryParam("arrival_date", checkIn)
+                                                        .queryParam("departure_date", checkOut)
+                                                        .queryParam("adults", guestCount)
+                                                        .queryParam("room_qty", 1)
+                                                        .queryParam("currency_code", "EUR")
+                                                        .queryParam("languagecode", "fr")
+                                                        .queryParam("page_number", 1)
+                                                        .build().encode().toUri());
+                        List<TravelOffer> offers = mapHotelOffers(hotelsResponse, destination, checkIn, checkOut);
+                        hotelSearchCache.put(cacheKey, new CachedHotelOffers(Instant.now().plusSeconds(900), offers));
+                        return offers;
+                } catch (RestClientResponseException exception) {
+                        String message = exception.getStatusCode().value() == 403
+                                        ? "Accès Booking refusé. Activez le forfait Basic gratuit de Booking COM sur RapidAPI et vérifiez la clé RAPIDAPI_KEY du backend."
+                                        : exception.getStatusCode().value() == 429
+                                                        ? "Quota RapidAPI atteint. Le forfait gratuit Booking COM est limité à 50 appels par mois."
+                                                        : "Le fournisseur Booking COM a refusé la recherche. Réessayez plus tard.";
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, message, exception);
+                } catch (RestClientException exception) {
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                        "Le fournisseur Booking COM est temporairement inaccessible.", exception);
+                } catch (JsonProcessingException | IllegalArgumentException exception) {
+                        return List.of();
+                }
+        }
+
+        private JsonNode getBookingApiResponse(URI uri) throws JsonProcessingException {
+                String body = restClient.get()
+                                .uri(uri)
+                                .header("X-RapidAPI-Key", rapidApiKey.trim())
+                                .header("X-RapidAPI-Host", rapidApiHost.trim())
+                                .accept(MediaType.APPLICATION_JSON)
+                                .retrieve()
+                                .body(String.class);
+                if (!hasText(body)) return objectMapper.createObjectNode();
+                return objectMapper.readTree(body);
+        }
+
+        private List<TravelOffer> mapHotelOffers(JsonNode response, String destination, String checkIn, String checkOut) {
+                JsonNode results = response.path("data").path("hotels");
+                if (!results.isArray()) results = response.path("data");
+                if (!results.isArray()) results = response.path("hotels");
+                if (!results.isArray()) return List.of();
+
+                long nights = LocalDate.parse(checkOut).toEpochDay() - LocalDate.parse(checkIn).toEpochDay();
+                List<TravelOffer> offers = new ArrayList<>();
+                for (JsonNode result : results) {
+                        JsonNode property = result.path("property").isObject() ? result.path("property") : result;
+                        JsonNode priceBreakdown = firstObject(property.path("priceBreakdown"), result.path("priceBreakdown"));
+                        JsonNode grossPrice = priceBreakdown.path("grossPrice");
+                        JsonNode priceNode = grossPrice.isObject() ? grossPrice.path("value") : grossPrice;
+                        if (!priceNode.isNumber() && !priceNode.isTextual()) {
+                                priceNode = firstPresent(property.path("price"), result.path("price"),
+                                                property.path("min_total_price"), result.path("min_total_price"));
+                        }
+                        BigDecimal price = decimalValue(priceNode);
+                        if (price == null || price.signum() <= 0) continue;
+
+                        String name = firstText(property, "name", "hotel_name", "title");
+                        if (!hasText(name)) name = firstText(result, "name", "hotel_name", "title");
+                        if (!hasText(name)) name = "Hébergement à " + destination;
+                        String id = firstText(property, "id", "hotel_id");
+                        if (!hasText(id)) id = firstText(result, "id", "hotel_id");
+                        if (!hasText(id)) id = Integer.toString(offers.size());
+                        String currency = firstText(grossPrice, "currency");
+                        if (!hasText(currency)) currency = firstText(priceBreakdown, "currency");
+                        if (!hasText(currency)) currency = "EUR";
+                        BigDecimal rating = decimalValue(firstPresent(property.path("reviewScore"),
+                                        property.path("review_score"), result.path("reviewScore"), result.path("review_score")));
+                        if (rating == null) rating = BigDecimal.ZERO;
+                        String directUrl = firstText(property, "url", "bookingUrl", "booking_url");
+                        if (!hasText(directUrl)) directUrl = firstText(result, "url", "bookingUrl", "booking_url");
+
+                        offers.add(new TravelOffer(
+                                        "booking-hotel-" + id,
+                                        OfferCategory.HOTEL,
+                                        name,
+                                        destination,
+                                        "Booking.com",
+                                        price,
+                                        currency.toUpperCase(Locale.ROOT),
+                                        "Du " + checkIn + " au " + checkOut + " · " + nights + " nuit(s) · tarif consulté sur Booking.com, à revérifier",
+                                        rating,
+                                        false,
+                                        safeBookingUrl(directUrl)
+                        ));
+                        if (offers.size() == 10) break;
+                }
+                return offers;
+        }
+
+        private static JsonNode selectDestination(JsonNode destinations, String query) {
+                if (!destinations.isArray()) return null;
+                String normalizedQuery = normalize(query.split(",", 2)[0]);
+                JsonNode first = null;
+                for (JsonNode candidate : destinations) {
+                        if (first == null) first = candidate;
+                        String type = candidate.path("search_type").asText("");
+                        String city = firstText(candidate, "city_name", "name", "label");
+                        if ((!hasText(type) || "CITY".equalsIgnoreCase(type))
+                                        && normalize(city).contains(normalizedQuery)) return candidate;
+                }
+                return first;
+        }
+
+        private static JsonNode firstObject(JsonNode first, JsonNode second) {
+                return first != null && first.isObject() ? first : second;
+        }
+
+        private static JsonNode firstPresent(JsonNode... nodes) {
+                for (JsonNode node : nodes) {
+                        if (node != null && !node.isMissingNode() && !node.isNull()) return node;
+                }
+                return null;
+        }
+
+        private static String firstText(JsonNode node, String... fields) {
+                for (String field : fields) {
+                        JsonNode value = node.path(field);
+                        if (value.isValueNode() && hasText(value.asText())) return value.asText();
+                }
+                return "";
+        }
+
+        private static BigDecimal decimalValue(JsonNode node) {
+                if (node == null || node.isNull() || node.isMissingNode()) return null;
+                try {
+                        return node.isNumber() ? node.decimalValue() : new BigDecimal(node.asText());
+                } catch (NumberFormatException exception) {
+                        return null;
+                }
+        }
+
+        private static String safeBookingUrl(String value) {
+                if (!hasText(value)) return null;
+                try {
+                        URI uri = URI.create(value);
+                        String host = uri.getHost();
+                        return "https".equalsIgnoreCase(uri.getScheme()) && host != null
+                                        && (host.equalsIgnoreCase("booking.com") || host.endsWith(".booking.com"))
+                                                        ? uri.toString()
+                                                        : null;
+                } catch (IllegalArgumentException exception) {
+                        return null;
+                }
+        }
+
+        private static String normalizeBaseUrl(String value) {
+                if (!hasText(value)) return "https://booking-com15.p.rapidapi.com";
+                String trimmed = value.trim();
+                return trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : "https://" + trimmed;
         }
 
         private static boolean isIataCode(String value) {
