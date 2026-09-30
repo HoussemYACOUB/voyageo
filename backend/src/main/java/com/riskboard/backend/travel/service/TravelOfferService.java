@@ -47,13 +47,32 @@ public class TravelOfferService {
 
         @Autowired
         TravelOfferService(
-                        RestClient.Builder restClientBuilder,
                         @Value("${providers.travelpayouts.token:}") String travelPayoutsToken,
                         @Value("${providers.booking.base-url:https://booking-com15.p.rapidapi.com}") String bookingApiBaseUrl,
                         @Value("${providers.booking.rapidapi-key:}") String rapidApiKey,
                         @Value("${providers.booking.rapidapi-host:booking-com15.p.rapidapi.com}") String rapidApiHost
         ) {
-                this.restClient = restClientBuilder.build();
+                this(RestClient.create(), travelPayoutsToken, bookingApiBaseUrl, rapidApiKey, rapidApiHost);
+        }
+
+        TravelOfferService(
+                        RestClient.Builder restClientBuilder,
+                        String travelPayoutsToken,
+                        String bookingApiBaseUrl,
+                        String rapidApiKey,
+                        String rapidApiHost
+        ) {
+                this(restClientBuilder.build(), travelPayoutsToken, bookingApiBaseUrl, rapidApiKey, rapidApiHost);
+        }
+
+        private TravelOfferService(
+                        RestClient restClient,
+                        String travelPayoutsToken,
+                        String bookingApiBaseUrl,
+                        String rapidApiKey,
+                        String rapidApiHost
+        ) {
+                this.restClient = restClient;
                 this.travelPayoutsToken = travelPayoutsToken;
                 this.bookingApiBaseUrl = normalizeBaseUrl(bookingApiBaseUrl);
                 this.rapidApiKey = rapidApiKey;
@@ -61,7 +80,7 @@ public class TravelOfferService {
         }
 
         TravelOfferService() {
-                this(RestClient.builder(), "", "", "", "");
+                this(RestClient.create(), "", "", "", "");
         }
 
     private static final List<TravelOffer> DEMO_OFFERS = List.of(
@@ -355,16 +374,40 @@ public class TravelOfferService {
 
         private static JsonNode selectDestination(JsonNode destinations, String query) {
                 if (!destinations.isArray()) return null;
-                String normalizedQuery = normalize(query.split(",", 2)[0]);
-                JsonNode first = null;
+                String[] queryParts = query.split(",", 2);
+                String normalizedCity = normalize(queryParts[0]);
+                String normalizedCountry = queryParts.length > 1 ? normalize(queryParts[1]) : "";
+                JsonNode bestMatch = null;
+                int bestScore = 0;
                 for (JsonNode candidate : destinations) {
-                        if (first == null) first = candidate;
-                        String type = candidate.path("search_type").asText("");
-                        String city = firstText(candidate, "city_name", "name", "label");
-                        if ((!hasText(type) || "CITY".equalsIgnoreCase(type))
-                                        && normalize(city).contains(normalizedQuery)) return candidate;
+                        String country = normalize(firstText(candidate, "country", "country_name"));
+                        String label = normalize(firstText(candidate, "label"));
+                        if (!normalizedCountry.isBlank()
+                                        && !country.contains(normalizedCountry)
+                                        && !label.contains(normalizedCountry)) continue;
+
+                        String city = normalize(firstText(candidate, "city_name"));
+                        String name = normalize(firstText(candidate, "name"));
+                        int score = 0;
+                        if (!city.isBlank()) {
+                                if (city.equals(normalizedCity)) score += 8;
+                                else if (city.startsWith(normalizedCity) || normalizedCity.startsWith(city)) score += 5;
+                                else if (city.contains(normalizedCity)) score += 3;
+                        }
+                        if (name.equals(normalizedCity)) score += 1;
+                        else if (name.startsWith(normalizedCity)) score += 4;
+                        else if (name.contains(normalizedCity)) score += 2;
+                        if (label.startsWith(normalizedCity)) score += 2;
+                        else if (label.contains(normalizedCity)) score += 1;
+                        if (!normalizedCountry.isBlank()) score += 6;
+                        if ("CITY".equalsIgnoreCase(candidate.path("search_type").asText())) score += 2;
+
+                        if (score > bestScore) {
+                                bestScore = score;
+                                bestMatch = candidate;
+                        }
                 }
-                return first;
+                return bestMatch;
         }
 
         private static JsonNode firstObject(JsonNode first, JsonNode second) {
@@ -412,7 +455,10 @@ public class TravelOfferService {
         private static String normalizeBaseUrl(String value) {
                 if (!hasText(value)) return "https://booking-com15.p.rapidapi.com";
                 String trimmed = value.trim();
-                return trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : "https://" + trimmed;
+                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) trimmed = "https://" + trimmed;
+                while (trimmed.endsWith("/")) trimmed = trimmed.substring(0, trimmed.length() - 1);
+                if (trimmed.endsWith("/api/v1")) trimmed = trimmed.substring(0, trimmed.length() - "/api/v1".length());
+                return trimmed;
         }
 
         private static boolean isIataCode(String value) {

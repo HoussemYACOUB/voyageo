@@ -31,7 +31,7 @@ class BookingHotelSearchTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         TravelOfferService service = new TravelOfferService(
-                builder, "", "https://booking.test", "test-rapidapi-key", "booking-com15.p.rapidapi.com");
+                builder, "", "https://booking.test/api/v1/", "test-rapidapi-key", "booking-com15.p.rapidapi.com");
         String checkIn = LocalDate.now().plusDays(30).toString();
         String checkOut = LocalDate.now().plusDays(34).toString();
 
@@ -41,7 +41,7 @@ class BookingHotelSearchTest {
                 .andExpect(header("X-RapidAPI-Key", "test-rapidapi-key"))
                 .andExpect(header("X-RapidAPI-Host", "booking-com15.p.rapidapi.com"))
                 .andRespond(withSuccess("""
-                        {"data":[{"dest_id":123,"search_type":"CITY","city_name":"Lisbonne"}]}
+                        {"data":[{"dest_id":123,"search_type":"CITY","city_name":"Lisbonne","country":"Portugal","label":"Lisbonne, Portugal"}]}
                         """, MediaType.APPLICATION_JSON));
         server.expect(request -> assertTrue(request.getURI().getPath().endsWith("/api/v1/hotels/searchHotels")))
                 .andExpect(method(HttpMethod.GET))
@@ -95,6 +95,37 @@ class BookingHotelSearchTest {
 
         assertEquals(1, offers.size());
         assertNull(offers.getFirst().bookingUrl());
+        server.verify();
+    }
+
+    @Test
+    void selectsTheRequestedCountryAndCityInsteadOfAnUnrelatedHomonym() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        TravelOfferService service = new TravelOfferService(
+                builder, "", "https://booking.test", "test-rapidapi-key", "booking-com15.p.rapidapi.com");
+        String checkIn = LocalDate.now().plusDays(30).toString();
+        String checkOut = LocalDate.now().plusDays(31).toString();
+
+        server.expect(request -> assertTrue(request.getURI().getPath().endsWith("/searchDestination")))
+                .andRespond(withSuccess("""
+                        {"data":[
+                          {"dest_id":"wrong","search_type":"hotel","name":"LISBONNE","city_name":"Le Mans","country":"France","label":"LISBONNE, Le Mans, France"},
+                          {"dest_id":"1859607","search_type":"hotel","name":"Lisbonne Appartements","city_name":"Lisbon","country":"Portugal","label":"Lisbonne Appartements, Lisbon, Portugal"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(request -> assertTrue(request.getURI().getPath().endsWith("/searchHotels")))
+                .andExpect(queryParam("dest_id", "1859607"))
+                .andExpect(queryParam("search_type", "hotel"))
+                .andRespond(withSuccess("""
+                        {"data":{"hotels":[{"property":{"id":"lisbon-hotel","name":"Lisbonne Appartements","priceBreakdown":{"grossPrice":{"value":200,"currency":"EUR"}}}}]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        var offers = service.search("Lisbonne, Portugal", OfferCategory.HOTEL, "price",
+                null, null, null, null, checkIn, checkOut, 2);
+
+        assertEquals(1, offers.size());
+        assertEquals("Lisbonne Appartements", offers.getFirst().title());
         server.verify();
     }
 
