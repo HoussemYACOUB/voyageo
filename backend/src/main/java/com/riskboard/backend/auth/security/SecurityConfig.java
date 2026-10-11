@@ -2,6 +2,7 @@ package com.riskboard.backend.auth.security;
 
 import java.util.List;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -34,6 +35,7 @@ public class SecurityConfig {
                     response.getWriter().write("{\"message\":\"Authentification requise.\"}");
                 }))
                 .authorizeHttpRequests(auth -> auth
+                    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                     .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/offers/**").permitAll()
