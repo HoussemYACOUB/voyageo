@@ -89,6 +89,12 @@
 
     <section class="search-panel" id="recherche" aria-label="Recherche de voyage">
       <form class="search-form" (ngSubmit)="searchOffers()">
+        @if (activeCategory() !== 'HOTEL') {
+          <div class="trip-type-control" role="group" aria-label="Type de trajet">
+            <button class="category-chip" type="button" [class.selected]="tripType() === 'ROUND_TRIP'" [attr.aria-pressed]="tripType() === 'ROUND_TRIP'" (click)="selectTripType('ROUND_TRIP')">Aller-retour</button>
+            <button class="category-chip" type="button" [class.selected]="tripType() === 'ONE_WAY'" [attr.aria-pressed]="tripType() === 'ONE_WAY'" (click)="selectTripType('ONE_WAY')">Aller simple</button>
+          </div>
+        }
         <div class="search-field-wrap destination-autocomplete">
           <label class="search-field destination-field">
             <span class="field-icon">⌖</span>
@@ -154,14 +160,16 @@
           </span>
         </label>
         <span class="field-divider"></span>
-        <label class="search-field date-field">
-          <span class="field-icon">▦</span>
-          <span class="field-content">
-            <span class="field-label">Retour</span>
-            <input name="return" type="date" [min]="departureDate() || minimumDate" [ngModel]="returnDate()" (ngModelChange)="returnDate.set($event)" aria-label="Date de retour">
-          </span>
-        </label>
-        <span class="field-divider"></span>
+        @if (tripType() === 'ROUND_TRIP' || activeCategory() === 'HOTEL') {
+          <label class="search-field date-field">
+            <span class="field-icon">▦</span>
+            <span class="field-content">
+              <span class="field-label">Retour</span>
+              <input name="return" type="date" [min]="departureDate() || minimumDate" [ngModel]="returnDate()" (ngModelChange)="returnDate.set($event)" aria-label="Date de retour">
+            </span>
+          </label>
+          <span class="field-divider"></span>
+        }
         <label class="search-field traveler-field">
           <span class="field-icon">♙</span>
           <span class="field-content">
@@ -170,6 +178,8 @@
               <option [ngValue]="1">1 voyageur</option><option [ngValue]="2">2 voyageurs</option>
               <option [ngValue]="3">3 voyageurs</option><option [ngValue]="4">4 voyageurs</option>
               <option [ngValue]="5">5 voyageurs</option><option [ngValue]="6">6 voyageurs</option>
+              <option [ngValue]="7">7 voyageurs</option><option [ngValue]="8">8 voyageurs</option>
+              <option [ngValue]="9">9 voyageurs</option>
             </select>
           </span>
         </label>
@@ -177,6 +187,7 @@
       </form>
       <div class="quick-suggestions" role="group" aria-label="Destinations populaires">
         <span>Populaire :</span>
+        <button type="button" class="suggestion-chip" (click)="quickSearch('')">N’importe où</button>
         @for (suggestion of destinationSuggestions(); track suggestion) {
           <button type="button" class="suggestion-chip" (click)="quickSearch(suggestion)">{{ suggestion }}</button>
         }
@@ -191,6 +202,36 @@
         }
       </div>
       <p class="search-note">Les recherches d’hôtels et de vols dépendent des quotas et conditions des fournisseurs. Les liens ouvrent leur site : Voyageo ne réalise ni réservation ni paiement.</p>
+    </section>
+
+    <section class="discovery-section inspiration-section" aria-labelledby="inspiration-title">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow section-eyebrow">L’INSPIRATION AVANT LE DÉPART</span>
+          <h2 id="inspiration-title">Votre prochaine histoire commence ici</h2>
+        </div>
+        <div class="category-list inspiration-tabs" role="group" aria-label="Type de destination à explorer">
+          <button type="button" class="category-chip" [class.selected]="inspirationCategory() === 'FLIGHT'" [attr.aria-pressed]="inspirationCategory() === 'FLIGHT'" (click)="selectInspirationCategory('FLIGHT')"><span>✈</span> Idées de vols</button>
+          <button type="button" class="category-chip" [class.selected]="inspirationCategory() === 'HOTEL'" [attr.aria-pressed]="inspirationCategory() === 'HOTEL'" (click)="selectInspirationCategory('HOTEL')"><span>⌂</span> Idées de séjours</button>
+        </div>
+      </div>
+      <div class="offer-grid inspiration-grid">
+        @for (inspiration of visibleInspirations(); track inspiration.title) {
+          <button type="button" class="offer-card inspiration-card" (click)="exploreInspiration(inspiration)" [attr.aria-label]="'Explorer ' + inspiration.title">
+            <div class="offer-art inspiration-photo">
+              <img class="art-photo inspiration-image" [src]="inspiration.imageUrl" [alt]="inspiration.imageAlt" loading="lazy" decoding="async" (error)="onOfferImageError($event)">
+              <span class="art-label">{{ inspiration.region }}</span>
+            </div>
+            <div class="offer-content inspiration-copy">
+              <span class="offer-destination">{{ inspiration.category === 'FLIGHT' ? 'IDÉE DE VOYAGE' : 'IDÉE DE SÉJOUR' }}</span>
+              <div class="offer-title-row"><h3>{{ inspiration.title }}</h3></div>
+              <span class="offer-details">{{ inspiration.description }}</span>
+              <span class="offer-action offer-action-link">Explorer {{ inspiration.destination }} <span aria-hidden="true">→</span></span>
+            </div>
+          </button>
+        }
+      </div>
+      <p class="search-note inspiration-note">Photos d’inspiration — elles ne représentent pas nécessairement un hébergement ou un vol proposé dans les résultats.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">

@@ -10,6 +10,7 @@ import { AuthService } from './services/auth.service';
 import { CitySuggestion, FlightSearchRoute, HotelSearchCriteria, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 type CategoryFilter = 'ALL' | OfferCategory;
+type TripType = 'ROUND_TRIP' | 'ONE_WAY';
 
 interface PartnerSite {
   id: string;
@@ -18,6 +19,16 @@ interface PartnerSite {
   categories: OfferCategory[];
   badge: string;
   color: string;
+}
+
+interface TravelInspiration {
+  destination: string;
+  category: 'FLIGHT' | 'HOTEL';
+  region: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  imageAlt: string;
 }
 
 registerLocaleData(localeFr, 'fr-FR');
@@ -62,6 +73,7 @@ export class App implements OnInit {
     return localDate.toISOString().slice(0, 10);
   })();
   protected readonly travelers = signal(2);
+  protected readonly tripType = signal<TripType>('ROUND_TRIP');
   protected readonly activeCategory = signal<CategoryFilter>('ALL');
   protected readonly sortBy = signal<OfferSort>('price');
   protected readonly offers = signal<TravelOffer[]>([]);
@@ -82,6 +94,48 @@ export class App implements OnInit {
     { id: 'CAR', label: 'Voitures', icon: '◈' },
     { id: 'CARPOOL', label: 'Covoiturage', icon: '🚙' }
   ];
+  protected readonly inspirationCategory = signal<'FLIGHT' | 'HOTEL'>('FLIGHT');
+  protected readonly travelInspirations: TravelInspiration[] = [
+    {
+      destination: 'Rome',
+      category: 'FLIGHT',
+      region: 'Italie',
+      title: 'Un week-end à Rome',
+      description: 'Ruelles historiques et longues soirées en terrasse.',
+      imageUrl: 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=900&h=620&q=82',
+      imageAlt: 'Vue ensoleillée sur les maisons colorées de la côte italienne'
+    },
+    {
+      destination: 'Lisbonne',
+      category: 'FLIGHT',
+      region: 'Portugal',
+      title: 'Cap sur Lisbonne',
+      description: 'Tramways, azulejos et lumière sur le Tage.',
+      imageUrl: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&w=900&h=620&q=82',
+      imageAlt: 'Façades et rues pittoresques de Lisbonne'
+    },
+    {
+      destination: 'Paris',
+      category: 'HOTEL',
+      region: 'France',
+      title: 'Une nuit parisienne',
+      description: 'Choisissez votre quartier et votre style de séjour.',
+      imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=900&h=620&q=82',
+      imageAlt: 'Toits de Paris au coucher du soleil'
+    },
+    {
+      destination: 'Nice',
+      category: 'HOTEL',
+      region: 'France',
+      title: 'Séjour au bord de mer',
+      description: 'Une escapade ensoleillée sur la Côte d’Azur.',
+      imageUrl: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=900&h=620&q=82',
+      imageAlt: 'Mer turquoise et littoral méditerranéen près de Nice'
+    }
+  ];
+  protected readonly visibleInspirations = computed(() =>
+    this.travelInspirations.filter((inspiration) => inspiration.category === this.inspirationCategory())
+  );
   protected readonly sortOptions: { id: OfferSort; label: string }[] = [
     { id: 'price', label: 'Prix le plus bas' },
     { id: 'rating', label: 'Mieux notées' }
@@ -344,12 +398,13 @@ export class App implements OnInit {
     this.loading.set(true);
     this.errorMessage.set('');
     const category = this.activeCategory();
-    const route: FlightSearchRoute | undefined = this.originIata() && this.destinationIata() && this.departureDate()
+    const route: FlightSearchRoute | undefined = this.activeCategory() !== 'HOTEL'
+      && this.originIata() && this.destinationIata() && this.departureDate()
       ? {
           originIata: this.originIata(),
           destinationIata: this.destinationIata(),
           departureDate: this.departureDate(),
-          returnDate: this.returnDate() || undefined
+          returnDate: this.tripType() === 'ROUND_TRIP' ? this.returnDate() || undefined : undefined
         }
       : undefined;
     const hotel: HotelSearchCriteria | undefined = category === 'HOTEL' && this.departureDate() && this.returnDate()
@@ -387,15 +442,39 @@ export class App implements OnInit {
   protected selectCategory(category: CategoryFilter): void {
     this.activeCategory.set(category);
     this.favoritesOnly.set(false);
+    if (category === 'HOTEL') this.tripType.set('ROUND_TRIP');
     this.searchOffers();
+  }
+
+  protected selectTripType(tripType: TripType): void {
+    this.tripType.set(tripType);
+    if (tripType === 'ONE_WAY') this.returnDate.set('');
   }
 
   protected selectSort(sort: OfferSort): void {
     this.sortBy.set(sort);
   }
 
+  protected selectInspirationCategory(category: 'FLIGHT' | 'HOTEL'): void {
+    this.inspirationCategory.set(category);
+  }
+
+  protected exploreInspiration(inspiration: TravelInspiration): void {
+    this.activeCategory.set(inspiration.category);
+    this.inspirationCategory.set(inspiration.category);
+    this.favoritesOnly.set(false);
+    this.destination.set(inspiration.destination);
+    this.destinationIata.set('');
+    this.destinationAutocompleteSuggestions.set([]);
+    this.destinationAutocompleteComplete.set(false);
+    this.searchOffers();
+  }
+
   /** Raccourci "faciliteur de tache" : remplit la destination et lance la recherche en un clic. */
   protected quickSearch(destination: string): void {
+    this.destinationIata.set('');
+    this.destinationAutocompleteSuggestions.set([]);
+    this.destinationAutocompleteComplete.set(false);
     this.destination.set(destination);
     this.searchOffers();
   }

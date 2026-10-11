@@ -56,13 +56,13 @@ describe('App', () => {
   });
 
   it('displays offers in ascending price order', () => {
-    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card h3') as NodeListOf<HTMLElement>)
+    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card) h3') as NodeListOf<HTMLElement>)
       .map((heading) => heading.textContent?.trim());
     expect(titles).toEqual(['Lyon → Paris', 'Paris → Rome']);
   });
 
   it('uses destination-specific high-resolution travel photography', () => {
-    const images = Array.from(fixture.nativeElement.querySelectorAll('.art-photo') as NodeListOf<HTMLImageElement>);
+    const images = Array.from(fixture.nativeElement.querySelectorAll('.art-photo:not(.inspiration-image)') as NodeListOf<HTMLImageElement>);
 
     expect(images[0].src).toContain('photo-1502602898657-3e91760cbb34');
     expect(images[1].src).toContain('photo-1552832230-c0197dd311b5');
@@ -76,8 +76,8 @@ describe('App', () => {
     trainFilter?.click();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelectorAll('.offer-card').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('.offer-card h3')?.textContent).toContain('Lyon → Paris');
+    expect(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card)').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.offer-card:not(.inspiration-card) h3')?.textContent).toContain('Lyon → Paris');
   });
 
   it('adds an offer to favorites and updates the counter', () => {
@@ -149,8 +149,8 @@ describe('App', () => {
     (fixture.nativeElement.querySelector('.favorites-link') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelectorAll('.offer-card').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('.offer-card h3')?.textContent).toContain('Lyon → Paris');
+    expect(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card)').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.offer-card:not(.inspiration-card) h3')?.textContent).toContain('Lyon → Paris');
   });
 
   it('sends a trimmed destination when searching', () => {
@@ -171,6 +171,113 @@ describe('App', () => {
     fixture.detectChanges();
 
     expect(service.search).toHaveBeenLastCalledWith('Rome', undefined, 'price');
+  });
+
+  it('searches all destinations from the anywhere discovery shortcut', () => {
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Tokyo';
+    destination.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const anywhere = Array.from(fixture.nativeElement.querySelectorAll('.suggestion-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('N’importe où'));
+    anywhere?.click();
+    fixture.detectChanges();
+
+    expect(service.search).toHaveBeenLastCalledWith('', undefined, 'price');
+  });
+
+  it('switches to a one-way trip and hides the return date field', () => {
+    const flights = Array.from(fixture.nativeElement.querySelectorAll('.category-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Vols'));
+    flights?.click();
+    fixture.detectChanges();
+
+    const oneWay = Array.from(fixture.nativeElement.querySelectorAll('.trip-type-control .category-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Aller simple'));
+    oneWay?.click();
+    fixture.detectChanges();
+
+    expect(oneWay?.getAttribute('aria-pressed')).toBe('true');
+    expect(fixture.nativeElement.querySelector('input[name="return"]')).toBeNull();
+  });
+
+  it('omits the return date from one-way flight searches', async () => {
+    service.autocomplete.mockReturnValue(of([
+      { text: 'Paris, France', iataCode: 'PAR', type: 'city', provider: 'travelpayouts' },
+      { text: 'Rome, Italie', iataCode: 'ROM', type: 'city', provider: 'travelpayouts' }
+    ]));
+    const flights = Array.from(fixture.nativeElement.querySelectorAll('.hero-shortcuts button') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Vols'));
+    flights?.click();
+    fixture.detectChanges();
+
+    for (const [name, city] of [['origin', 'Paris'], ['destination', 'Rome']]) {
+      const input = fixture.nativeElement.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+      input.value = city;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('#origin-city-options [role="option"]') as HTMLButtonElement).click();
+    (fixture.nativeElement.querySelector('#destination-city-options [role="option"]') as HTMLButtonElement).click();
+
+    const departure = fixture.nativeElement.querySelector('input[name="departure"]') as HTMLInputElement;
+    departure.value = '2099-10-15';
+    departure.dispatchEvent(new Event('input', { bubbles: true }));
+    const returnDate = fixture.nativeElement.querySelector('input[name="return"]') as HTMLInputElement;
+    returnDate.value = '2099-10-20';
+    returnDate.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (Array.from(fixture.nativeElement.querySelectorAll('.trip-type-control .category-chip')) as HTMLButtonElement[])
+      .find((button) => button.textContent?.includes('Aller simple'))?.click();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.search-button') as HTMLButtonElement).click();
+
+    expect(service.search).toHaveBeenLastCalledWith('Rome, Italie', 'FLIGHT', 'price', {
+      originIata: 'PAR',
+      destinationIata: 'ROM',
+      departureDate: '2099-10-15',
+      returnDate: undefined
+    });
+  });
+
+  it('offers traveler counts up to nine', () => {
+    const travelerOptions = fixture.nativeElement.querySelectorAll('select[name="travelers"] option');
+
+    expect(travelerOptions).toHaveLength(9);
+    expect(travelerOptions[8].textContent).toContain('9 voyageurs');
+  });
+
+  it('shows real-photo destination inspiration for flights and hotels', () => {
+    const images = fixture.nativeElement.querySelectorAll('.inspiration-photo img') as NodeListOf<HTMLImageElement>;
+    expect(images).toHaveLength(2);
+    expect(images[0].src).toContain('images.unsplash.com');
+    expect(images[0].alt).toContain('italienne');
+
+    const staysTab = Array.from(fixture.nativeElement.querySelectorAll('.inspiration-tabs button') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('séjours'));
+    staysTab?.click();
+    fixture.detectChanges();
+
+    const hotelImages = fixture.nativeElement.querySelectorAll('.inspiration-photo img') as NodeListOf<HTMLImageElement>;
+    expect(staysTab?.getAttribute('aria-pressed')).toBe('true');
+    expect(hotelImages).toHaveLength(2);
+    expect(hotelImages[0].alt).toContain('Paris');
+  });
+
+  it('sets the relevant travel category and searches after selecting an inspiration card', async () => {
+    const staysTab = Array.from(fixture.nativeElement.querySelectorAll('.inspiration-tabs button') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('séjours'));
+    staysTab?.click();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.inspiration-card') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.search).toHaveBeenLastCalledWith('Paris', 'HOTEL', 'price');
+    expect(fixture.nativeElement.querySelector('input[name="destination"]')?.value).toBe('Paris');
   });
 
   it('filters autocomplete results to the typed city', async () => {
@@ -242,7 +349,7 @@ describe('App', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card h3') as NodeListOf<HTMLElement>)
+    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card) h3') as NodeListOf<HTMLElement>)
       .map((heading) => heading.textContent?.trim());
     expect(titles).toEqual(['Paris → Rome', 'Lyon → Paris']);
     expect(service.search).toHaveBeenCalledTimes(1);
