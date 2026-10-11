@@ -60,6 +60,15 @@ describe('App', () => {
     expect(titles).toEqual(['Lyon → Paris', 'Paris → Rome']);
   });
 
+  it('uses destination-specific high-resolution travel photography', () => {
+    const images = Array.from(fixture.nativeElement.querySelectorAll('.art-photo') as NodeListOf<HTMLImageElement>);
+
+    expect(images[0].src).toContain('photo-1502602898657-3e91760cbb34');
+    expect(images[1].src).toContain('photo-1552832230-c0197dd311b5');
+    expect(images[0].src).toContain('w=900');
+    expect(images[0].getAttribute('decoding')).toBe('async');
+  });
+
   it('filters offers by selected category', () => {
     const trainFilter = Array.from(fixture.nativeElement.querySelectorAll('.category-chip') as NodeListOf<HTMLButtonElement>)
       .find((button) => button.textContent?.includes('Trains'));

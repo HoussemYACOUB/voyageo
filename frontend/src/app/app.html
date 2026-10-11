@@ -63,15 +63,14 @@
   <main id="top">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <span class="eyebrow"><span class="sparkle">✦</span> LE VOYAGE, AU BON PRIX</span>
-        <h1 id="hero-title">Le monde vous va <span>si bien.</span></h1>
-        <p>Comparez, choisissez, partez. Votre prochaine belle histoire commence ici.</p>
+        <span class="eyebrow"><span class="sparkle">✦</span> VOTRE PROCHAIN DÉPART COMMENCE ICI</span>
+        <h1 id="hero-title">Et si on partait <span>ailleurs ?</span></h1>
+        <p>Comparez les options, trouvez l’inspiration et préparez votre prochaine escapade.</p>
       </div>
-      <div class="hero-stamp"><span>✈</span><small>PARTOUT<br>AVEC VOUS</small></div>
-      <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
-      <div class="hero-shortcuts" role="group" aria-label="Raccourcis de recherche">
-        <button type="button" (click)="selectCategory('FLIGHT')"><span>✈</span> Trouver un vol</button>
-        <button type="button" (click)="selectCategory('HOTEL')"><span>⌂</span> Trouver un hôtel</button>
+      <div class="hero-shortcuts" role="group" aria-label="Choisir un type de voyage">
+        <button type="button" [class.selected]="activeCategory() === 'FLIGHT'" [attr.aria-pressed]="activeCategory() === 'FLIGHT'" (click)="selectCategory('FLIGHT')"><span>✈</span> Vols</button>
+        <button type="button" [class.selected]="activeCategory() === 'HOTEL'" [attr.aria-pressed]="activeCategory() === 'HOTEL'" (click)="selectCategory('HOTEL')"><span>⌂</span> Séjours</button>
+        <button type="button" [class.selected]="activeCategory() === 'ALL'" [attr.aria-pressed]="activeCategory() === 'ALL'" (click)="selectCategory('ALL')"><span>✦</span> Tout comparer</button>
       </div>
     </section>
 
@@ -238,8 +237,7 @@
           @for (offer of visibleOffers(); track offer.id) {
             <article class="offer-card">
               <div class="offer-art" [attr.data-category]="offer.category">
-                <img class="art-photo" [src]="offerImageUrl(offer)" [alt]="offer.destination + ' - ' + categoryLabel(offer.category)" loading="lazy" (error)="onOfferImageError($event)">
-                <div class="art-sun"></div><span class="art-icon">{{ offerIcon(offer.category) }}</span>
+                <img class="art-photo" [src]="offerImageUrl(offer)" [alt]="offer.destination + ' - ' + categoryLabel(offer.category)" loading="lazy" decoding="async" (error)="onOfferImageError($event)">
                 <span class="art-label">{{ categoryLabel(offer.category) }}</span>
                 <button class="save-button" type="button" [attr.aria-label]="isFavorite(offer.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'" [attr.aria-pressed]="isFavorite(offer.id)" (click)="toggleFavorite(offer.id)">{{ isFavorite(offer.id) ? '♥' : '♡' }}</button>
               </div>

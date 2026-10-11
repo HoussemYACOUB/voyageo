@@ -26,7 +26,7 @@ registerLocaleData(localeFr, 'fr-FR');
   selector: 'app-root',
   imports: [CommonModule, FormsModule, PriceComparisonChart],
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrls: ['./app.scss', './auth.scss']
 })
 export class App implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
@@ -309,25 +309,31 @@ export class App implements OnInit {
     return this.categories.find((item) => item.id === category)?.label ?? category;
   }
 
-  protected offerIcon(category: OfferCategory): string {
-    return this.categories.find((item) => item.id === category)?.icon ?? '✦';
-  }
+  private static readonly destinationPhotoIds: Record<string, string> = {
+    paris: 'photo-1502602898657-3e91760cbb34',
+    lisbonne: 'photo-1555881400-74d7acaacd8b',
+    rome: 'photo-1552832230-c0197dd311b5',
+    'new york': 'photo-1485871981521-5b1fd3805eee',
+    nice: 'photo-1533105079780-92b9be482077',
+    lyon: 'photo-1500530855697-b586d89ba3ee'
+  };
 
-  // Photos Unsplash directes (CDN stable, sans cle API) choisies selon la categorie
   private static readonly categoryPhotoIds: Record<OfferCategory, string[]> = {
-    HOTEL: ['1566073771259-6a8506099945', '1445019980597-93fa8acb246c', '1571003123894-1f0594d2b5d9', '1512918728675-ed5a9ecdebfd'],
-    FLIGHT: ['1436491865332-7a61a109cc05', '1569154941061-e231b4725ef1', '1544620347-c4fd4a3d5957'],
-    TRAIN: ['1517649763962-0c623066013b', '1568605114967-8130f3a36994', '1474487548417-781cb71495f3'],
-    CAR: ['1502877338535-766e1452684a', '1449965408869-eaa3f722e40d', '1503376780353-7e6692767b70', '1494905998402-395d579af36f'],
-    CARPOOL: ['1502877338535-766e1452684a', '1449965408869-eaa3f722e40d', '1494905998402-395d579af36f']
+    HOTEL: ['photo-1566073771259-6a8506099945', 'photo-1445019980597-93fa8acb246c', 'photo-1571003123894-1f0594d2b5d9'],
+    FLIGHT: ['photo-1436491865332-7a61a109cc05', 'photo-1569154941061-e231b4725ef1', 'photo-1544620347-c4fd4a3d5957'],
+    TRAIN: ['photo-1474487548417-781cb71495f3', 'photo-1517649763962-0c623066013b', 'photo-1568605114967-8130f3a36994'],
+    CAR: ['photo-1502877338535-766e1452684a', 'photo-1449965408869-eaa3f722e40d', 'photo-1503376780353-7e6692767b70'],
+    CARPOOL: ['photo-1502877338535-766e1452684a', 'photo-1449965408869-eaa3f722e40d', 'photo-1494905998402-395d579af36f']
   };
 
   protected offerImageUrl(offer: TravelOffer): string {
-    const ids = App.categoryPhotoIds[offer.category];
-    let hash = 0;
-    for (const char of `${offer.destination}-${offer.id}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-    const photoId = ids[hash % ids.length];
-    return `https://images.unsplash.com/photo-${photoId}?w=480&h=320&fit=crop&q=70`;
+    const destination = offer.destination
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .trim()
+      .toLocaleLowerCase('fr-FR');
+    const photoId = App.destinationPhotoIds[destination] ?? App.categoryPhotoIds[offer.category][0];
+    return `https://images.unsplash.com/${photoId}?auto=format&fit=crop&w=900&h=620&q=82`;
   }
 
   protected onOfferImageError(event: Event): void {
