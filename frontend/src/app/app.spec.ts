@@ -254,7 +254,8 @@ describe('App', () => {
     const images = fixture.nativeElement.querySelectorAll('.inspiration-photo img') as NodeListOf<HTMLImageElement>;
     expect(images).toHaveLength(2);
     expect(images[0].src).toContain('images.unsplash.com');
-    expect(images[0].alt).toContain('italienne');
+    expect(images[0].src).toContain('photo-1552832230-c0197dd311b5');
+    expect(images[0].alt).toContain('Rome');
 
     const staysTab = Array.from(fixture.nativeElement.querySelectorAll('.inspiration-tabs button') as NodeListOf<HTMLButtonElement>)
       .find((button) => button.textContent?.includes('séjours'));

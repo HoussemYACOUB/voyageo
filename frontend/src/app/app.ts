@@ -102,8 +102,8 @@ export class App implements OnInit {
       region: 'Italie',
       title: 'Un week-end à Rome',
       description: 'Ruelles historiques et longues soirées en terrasse.',
-      imageUrl: 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=900&h=620&q=82',
-      imageAlt: 'Vue ensoleillée sur les maisons colorées de la côte italienne'
+      imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=900&h=620&q=82',
+      imageAlt: 'Le Colisée et l’architecture historique de Rome'
     },
     {
       destination: 'Lisbonne',
