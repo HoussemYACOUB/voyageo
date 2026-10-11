@@ -58,7 +58,7 @@ function resolveAutocompleteUrl(): string {
     return 'https://voyageo-app.netlify.app/api/places/autocomplete';
   }
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:8888/api/places/autocomplete';
+    return 'https://voyageo-app.netlify.app/api/places/autocomplete';
   }
   return '/api/places/autocomplete';
 }

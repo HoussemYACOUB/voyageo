@@ -81,12 +81,12 @@ describe('TravelOfferService', () => {
     request.flush(['Lyon', 'Paris']);
   });
 
-  it('requests Google city autocomplete through the Netlify function', () => {
+  it('uses the deployed autocomplete function during Angular local development', () => {
     service.autocomplete('Lisbon').subscribe((suggestions) => {
       expect(suggestions).toEqual([{ text: 'Lisbon, Portugal', placeId: 'place-id', provider: 'google' }]);
     });
 
-    const request = http.expectOne((candidate) => candidate.url === 'http://localhost:8888/api/places/autocomplete');
+    const request = http.expectOne((candidate) => candidate.url === 'https://voyageo-app.netlify.app/api/places/autocomplete');
     expect(request.request.method).toBe('GET');
     expect(request.request.params.get('q')).toBe('Lisbon');
     request.flush({ suggestions: [{ text: 'Lisbon, Portugal', placeId: 'place-id', provider: 'google' }] });
