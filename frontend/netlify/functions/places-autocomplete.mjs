@@ -79,7 +79,7 @@ async function travelpayoutsSuggestions(query) {
   const seen = new Set();
   return relevantSuggestions([...cities, ...airports]
     .filter((suggestion) => {
-      const key = `${suggestion.type}:${suggestion.iataCode}`;
+      const key = `${normalize(suggestion.text)}:${suggestion.iataCode}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
