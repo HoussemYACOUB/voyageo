@@ -28,6 +28,24 @@ function fallbackSuggestions(query) {
     .map((text) => ({ text, provider: 'fallback' }));
 }
 
+function relevantSuggestions(suggestions, query) {
+  const normalizedQuery = normalize(query);
+  return suggestions
+    .map((suggestion, index) => {
+      const text = normalize(suggestion.text);
+      const code = normalize(suggestion.iataCode || '');
+      const textScore = text.startsWith(normalizedQuery) ? 0
+        : text.includes(normalizedQuery) ? 1
+          : Number.POSITIVE_INFINITY;
+      const codeScore = code.startsWith(normalizedQuery) ? 2 : Number.POSITIVE_INFINITY;
+      return { suggestion, index, score: Math.min(textScore, codeScore) };
+    })
+    .filter(({ score }) => Number.isFinite(score))
+    .sort((left, right) => left.score - right.score || left.index - right.index)
+    .slice(0, 6)
+    .map(({ suggestion }) => suggestion);
+}
+
 async function travelpayoutsSuggestions(query) {
   const params = new URLSearchParams({ term: query, locale: 'fr' });
   params.append('types[]', 'city');
@@ -59,14 +77,13 @@ async function travelpayoutsSuggestions(query) {
   const cities = suggestions.filter((location) => location.type === 'city');
   const airports = suggestions.filter((location) => location.type === 'airport');
   const seen = new Set();
-  return [...cities, ...airports]
+  return relevantSuggestions([...cities, ...airports]
     .filter((suggestion) => {
       const key = `${suggestion.type}:${suggestion.iataCode}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    })
-    .slice(0, 6);
+    }), query);
 }
 
 async function geoapifySuggestions(query, apiKey) {
@@ -76,14 +93,14 @@ async function geoapifySuggestions(query, apiKey) {
   });
   if (!response.ok) return null;
   const result = await response.json();
-  return (result.results ?? [])
+  const suggestions = (result.results ?? [])
     .map((place) => ({
       text: place.formatted,
       placeId: place.place_id,
       provider: 'geoapify'
     }))
-    .filter((suggestion) => typeof suggestion.text === 'string' && suggestion.text.length > 0)
-    .slice(0, 5);
+    .filter((suggestion) => typeof suggestion.text === 'string' && suggestion.text.length > 0);
+  return relevantSuggestions(suggestions, query).slice(0, 5);
 }
 
 export default async (request) => {
@@ -154,7 +171,7 @@ export default async (request) => {
       .filter((suggestion) => typeof suggestion.text === 'string' && suggestion.text.length > 0)
       .slice(0, 5);
 
-    return Response.json({ suggestions, provider: 'google' }, { headers: responseHeaders });
+    return Response.json({ suggestions: relevantSuggestions(suggestions, query), provider: 'google' }, { headers: responseHeaders });
   } catch {
       // Last-resort suggestions are generated locally.
     }

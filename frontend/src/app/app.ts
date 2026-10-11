@@ -4,7 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { catchError, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, map, of, Subscription, switchMap } from 'rxjs';
 import { PriceComparisonChart, PriceComparisonItem } from './price-comparison-chart/price-comparison-chart';
 import { AuthService } from './services/auth.service';
 import { CitySuggestion, FlightSearchRoute, HotelSearchCriteria, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
@@ -22,6 +22,22 @@ interface PartnerSite {
 
 registerLocaleData(localeFr, 'fr-FR');
 
+const FAVORITES_STORAGE_KEY = 'voyageo.favorites';
+const FALLBACK_CITIES: CitySuggestion[] = [
+  { text: 'Paris, France', placeId: 'PAR', iataCode: 'PAR', type: 'city', provider: 'fallback' },
+  { text: 'Lyon, France', placeId: 'LYS', iataCode: 'LYS', type: 'city', provider: 'fallback' },
+  { text: 'Marseille, France', placeId: 'MRS', iataCode: 'MRS', type: 'city', provider: 'fallback' },
+  { text: 'Nice, France', placeId: 'NCE', iataCode: 'NCE', type: 'city', provider: 'fallback' },
+  { text: 'Lisbonne, Portugal', placeId: 'LIS', iataCode: 'LIS', type: 'city', provider: 'fallback' },
+  { text: 'Rome, Italie', placeId: 'ROM', iataCode: 'ROM', type: 'city', provider: 'fallback' },
+  { text: 'Londres, Royaume-Uni', placeId: 'LON', iataCode: 'LON', type: 'city', provider: 'fallback' },
+  { text: 'New York, États-Unis', placeId: 'NYC', iataCode: 'NYC', type: 'city', provider: 'fallback' }
+];
+
+function normalizeCityQuery(value: string): string {
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, PriceComparisonChart],
@@ -32,6 +48,7 @@ export class App implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly offerService = inject(TravelOfferService);
   private readonly authService = inject(AuthService);
+  private activeSearch?: Subscription;
 
   protected readonly destination = signal('');
   protected readonly origin = signal('');
@@ -39,6 +56,11 @@ export class App implements OnInit {
   protected readonly destinationIata = signal('');
   protected readonly departureDate = signal('');
   protected readonly returnDate = signal('');
+  protected readonly minimumDate = (() => {
+    const date = new Date();
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return localDate.toISOString().slice(0, 10);
+  })();
   protected readonly travelers = signal(2);
   protected readonly activeCategory = signal<CategoryFilter>('ALL');
   protected readonly sortBy = signal<OfferSort>('price');
@@ -50,6 +72,8 @@ export class App implements OnInit {
   protected readonly destinationSuggestions = signal<string[]>([]);
   protected readonly originAutocompleteSuggestions = signal<CitySuggestion[]>([]);
   protected readonly destinationAutocompleteSuggestions = signal<CitySuggestion[]>([]);
+  protected readonly originAutocompleteComplete = signal(false);
+  protected readonly destinationAutocompleteComplete = signal(false);
   protected readonly categories: { id: CategoryFilter; label: string; icon: string }[] = [
     { id: 'ALL', label: 'Tout comparer', icon: '✦' },
     { id: 'HOTEL', label: 'Hébergements', icon: '⌂' },
@@ -175,6 +199,7 @@ export class App implements OnInit {
   protected readonly hasDemoOffers = computed(() => this.visibleOffers().some((offer) => offer.demo));
 
   ngOnInit(): void {
+    this.restoreFavorites();
     this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => undefined });
     this.offerService.destinations().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (destinations) => this.destinationSuggestions.set(destinations),
@@ -187,7 +212,10 @@ export class App implements OnInit {
         switchMap((query) => this.autocompleteCities(query)),
         takeUntilDestroyed(this.destroyRef)
       )
-      .subscribe((suggestions) => this.originAutocompleteSuggestions.set(suggestions));
+      .subscribe((suggestions) => {
+        this.originAutocompleteSuggestions.set(suggestions);
+        this.originAutocompleteComplete.set(this.origin().trim().length >= 2);
+      });
     this.destinationAutocompleteChanges$
       .pipe(
         debounceTime(250),
@@ -195,41 +223,124 @@ export class App implements OnInit {
         switchMap((query) => this.autocompleteCities(query)),
         takeUntilDestroyed(this.destroyRef)
       )
-      .subscribe((suggestions) => this.destinationAutocompleteSuggestions.set(suggestions));
+      .subscribe((suggestions) => {
+        this.destinationAutocompleteSuggestions.set(suggestions);
+        this.destinationAutocompleteComplete.set(this.destination().trim().length >= 2);
+      });
     this.searchOffers();
   }
 
   private autocompleteCities(query: string) {
     const trimmedQuery = query.trim();
     if (trimmedQuery.length < 2) return of<CitySuggestion[]>([]);
-    return this.offerService.autocomplete(trimmedQuery).pipe(catchError(() => of<CitySuggestion[]>([])));
+    return this.offerService.autocomplete(trimmedQuery).pipe(
+      map((suggestions) => this.relevantSuggestions(suggestions, trimmedQuery)),
+      map((suggestions) => suggestions.length ? suggestions : this.localSuggestions(trimmedQuery)),
+      catchError((error: unknown) => {
+        console.warn('Autocomplétion indisponible, utilisation des suggestions locales.', error);
+        return of(this.localSuggestions(trimmedQuery));
+      })
+    );
+  }
+
+  private relevantSuggestions(suggestions: CitySuggestion[], query: string): CitySuggestion[] {
+    const normalizedQuery = normalizeCityQuery(query);
+    return suggestions
+      .map((suggestion, index) => {
+        const normalizedText = normalizeCityQuery(suggestion.text);
+        const normalizedCode = normalizeCityQuery(suggestion.iataCode ?? '');
+        const textScore = normalizedText.startsWith(normalizedQuery) ? 0
+          : normalizedText.includes(normalizedQuery) ? 1
+            : Number.POSITIVE_INFINITY;
+        const codeScore = normalizedCode.startsWith(normalizedQuery) ? 2 : Number.POSITIVE_INFINITY;
+        return { suggestion, index, score: Math.min(textScore, codeScore) };
+      })
+      .filter(({ score }) => Number.isFinite(score))
+      .sort((left, right) => left.score - right.score || left.index - right.index)
+      .slice(0, 6)
+      .map(({ suggestion }) => suggestion);
+  }
+
+  private localSuggestions(query: string): CitySuggestion[] {
+    const normalizedQuery = normalizeCityQuery(query);
+    return FALLBACK_CITIES
+      .filter((suggestion) =>
+        normalizeCityQuery(suggestion.text).includes(normalizedQuery)
+        || normalizeCityQuery(suggestion.iataCode ?? '').startsWith(normalizedQuery)
+      )
+      .slice(0, 5);
+  }
+
+  private restoreFavorites(): void {
+    try {
+      const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.every((id) => typeof id === 'string')) {
+        this.favorites.set(new Set(parsed));
+      } else {
+        console.warn('Les favoris locaux de Voyageo sont illisibles et ont été ignorés.');
+      }
+    } catch (error) {
+      console.warn('Impossible de restaurer les favoris locaux de Voyageo.', error);
+    }
+  }
+
+  private persistFavorites(favorites: Set<string>): void {
+    try {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favorites]));
+    } catch (error) {
+      console.warn('Impossible d’enregistrer les favoris locaux de Voyageo.', error);
+    }
   }
 
   protected selectOriginSuggestion(suggestion: CitySuggestion): void {
     this.origin.set(suggestion.text);
     this.originIata.set(suggestion.iataCode ?? '');
     this.originAutocompleteSuggestions.set([]);
+    this.originAutocompleteComplete.set(false);
   }
 
   protected selectDestinationSuggestion(suggestion: CitySuggestion): void {
     this.destination.set(suggestion.text);
     this.destinationIata.set(suggestion.iataCode ?? '');
     this.destinationAutocompleteSuggestions.set([]);
+    this.destinationAutocompleteComplete.set(false);
   }
 
   protected updateOrigin(value: string): void {
     if (value !== this.origin()) this.originIata.set('');
     this.origin.set(value);
-    if (value.trim().length < 2) this.originAutocompleteSuggestions.set([]);
+    if (value.trim().length < 2) {
+      this.originAutocompleteSuggestions.set([]);
+      this.originAutocompleteComplete.set(false);
+    }
   }
 
   protected updateDestination(value: string): void {
     if (value !== this.destination()) this.destinationIata.set('');
     this.destination.set(value);
-    if (value.trim().length < 2) this.destinationAutocompleteSuggestions.set([]);
+    if (value.trim().length < 2) {
+      this.destinationAutocompleteSuggestions.set([]);
+      this.destinationAutocompleteComplete.set(false);
+    }
   }
 
   protected searchOffers(): void {
+    const dateError = this.departureDate() && this.departureDate() < this.minimumDate
+      ? 'La date de départ doit être aujourd’hui ou dans le futur.'
+      : this.returnDate() && this.returnDate() < this.minimumDate
+        ? 'La date de retour doit être aujourd’hui ou dans le futur.'
+        : this.departureDate() && this.returnDate() && this.returnDate() < this.departureDate()
+          ? 'La date de retour doit être postérieure à la date de départ.'
+          : '';
+    if (dateError) {
+      this.activeSearch?.unsubscribe();
+      this.loading.set(false);
+      this.errorMessage.set(dateError);
+      return;
+    }
+
     this.loading.set(true);
     this.errorMessage.set('');
     const category = this.activeCategory();
@@ -251,7 +362,8 @@ export class App implements OnInit {
       : route
         ? this.offerService.search(query, selectedCategory, this.sortBy(), route)
         : this.offerService.search(query, selectedCategory, this.sortBy());
-    request
+    this.activeSearch?.unsubscribe();
+    this.activeSearch = request
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (offers) => {
@@ -293,12 +405,24 @@ export class App implements OnInit {
   }
 
   protected toggleFavorite(id: string): void {
-    this.favorites.update((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(this.favorites());
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this.favorites.set(next);
+    this.persistFavorites(next);
+  }
+
+  protected swapRoute(): void {
+    const currentOrigin = this.origin();
+    const currentOriginIata = this.originIata();
+    this.origin.set(this.destination());
+    this.originIata.set(this.destinationIata());
+    this.destination.set(currentOrigin);
+    this.destinationIata.set(currentOriginIata);
+    this.originAutocompleteSuggestions.set([]);
+    this.destinationAutocompleteSuggestions.set([]);
+    this.originAutocompleteComplete.set(false);
+    this.destinationAutocompleteComplete.set(false);
   }
 
   protected isFavorite(id: string): boolean {
@@ -369,6 +493,11 @@ export class App implements OnInit {
 
   protected openAuth(mode: 'login' | 'register'): void {
     this.authMode.set(mode);
+    this.authOpen.set(true);
+    this.authError.set('');
+  }
+
+  protected openProfile(): void {
     this.authOpen.set(true);
     this.authError.set('');
   }

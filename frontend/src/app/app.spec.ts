@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { App } from './app';
 import { AuthService } from './services/auth.service';
@@ -24,6 +24,7 @@ describe('App', () => {
   };
 
   beforeEach(async () => {
+    localStorage.clear();
     service = {
       search: vi.fn(() => of(demoOffers)),
       destinations: vi.fn(() => of(['Paris', 'Rome'])),
@@ -88,6 +89,61 @@ describe('App', () => {
     expect(favoriteButton.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('restores saved favorites after the app is reloaded', () => {
+    (fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    fixture.destroy();
+
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.favorite-count')?.textContent).toContain('1');
+    expect(fixture.nativeElement.querySelector('.save-button')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('opens Voyageo account registration and sends the form to its auth service', async () => {
+    (Array.from(fixture.nativeElement.querySelectorAll('.auth-secondary')) as HTMLButtonElement[])
+      .find((button) => button.textContent?.includes('Créer un compte'))?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const fields: Record<string, string> = {
+      displayName: 'Alex Voyageur',
+      email: 'alex@example.com',
+      password: 'un-mot-de-passe-solide'
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      const input = fixture.nativeElement.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('.auth-form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(authService.register).toHaveBeenCalledWith({
+      email: 'alex@example.com',
+      password: 'un-mot-de-passe-solide',
+      displayName: 'Alex Voyageur'
+    });
+    expect(fixture.nativeElement.querySelector('.auth-overlay')).toBeNull();
+  });
+
+  it('shows the signed-in user profile when the account avatar is selected', () => {
+    const account = { id: 1, email: 'alex@example.com', displayName: 'Alex Voyageur' };
+    authService.currentUser.set(account);
+    authService.isAuthenticated.set(true);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.profile-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.profile-summary')?.textContent).toContain('alex@example.com');
+    expect(fixture.nativeElement.querySelector('.profile-actions')?.textContent).toContain('Voir mes favoris');
+  });
+
   it('shows only saved offers in the favorites view', () => {
     (fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement).click();
     (fixture.nativeElement.querySelector('.favorites-link') as HTMLButtonElement).click();
@@ -115,6 +171,69 @@ describe('App', () => {
     fixture.detectChanges();
 
     expect(service.search).toHaveBeenLastCalledWith('Rome', undefined, 'price');
+  });
+
+  it('filters autocomplete results to the typed city', async () => {
+    service.autocomplete.mockReturnValue(of([
+      { text: 'Kars, Turquie', iataCode: 'KSY', type: 'city', provider: 'travelpayouts' },
+      { text: 'Paris, France', iataCode: 'PAR', type: 'city', provider: 'travelpayouts' }
+    ]));
+    const input = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    input.value = 'Paris';
+    input.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    fixture.detectChanges();
+
+    const suggestions = fixture.nativeElement.querySelectorAll('#destination-city-options [role="option"]');
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].textContent).toContain('Paris');
+    expect(suggestions[0].textContent).not.toContain('Kars');
+  });
+
+  it('offers labeled local autocomplete suggestions when the provider is unavailable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    service.autocomplete.mockReturnValue(throwError(() => new Error('offline')));
+    const input = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    input.value = 'Paris';
+    input.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#destination-city-options')?.textContent).toContain('Paris, France');
+    expect(fixture.nativeElement.querySelector('#destination-city-options')?.textContent).toContain('Suggestions locales');
+    vi.restoreAllMocks();
+  });
+
+  it('swaps the origin, destination, and selected airport codes', async () => {
+    await fixture.whenStable();
+    const origin = fixture.nativeElement.querySelector('input[name="origin"]') as HTMLInputElement;
+    origin.value = 'Paris';
+    origin.dispatchEvent(new Event('input'));
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Lyon';
+    destination.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.route-swap') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('input[name="origin"]') as HTMLInputElement).value).toBe('Lyon');
+    expect((fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement).value).toBe('Paris');
+  });
+
+  it('rejects a return date before departure instead of hiding the results', () => {
+    const departure = fixture.nativeElement.querySelector('input[name="departure"]') as HTMLInputElement;
+    departure.value = '2099-10-20';
+    departure.dispatchEvent(new Event('input'));
+    const returnDate = fixture.nativeElement.querySelector('input[name="return"]') as HTMLInputElement;
+    returnDate.value = '2099-10-15';
+    returnDate.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.search-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('postérieure');
   });
 
   it('resorts offers by rating locally without another provider request', () => {

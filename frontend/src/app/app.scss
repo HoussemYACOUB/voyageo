@@ -31,6 +31,7 @@
 .search-form { display: flex; align-items: center; gap: 5px; min-height: 58px; }
 .search-field-wrap { position: relative; flex: 1; min-width: 0; }
 .destination-autocomplete { flex: 1.3; }
+.route-swap { flex: 0 0 auto; padding: 4px 7px; border: 1px solid #dce7f1; border-radius: 50%; background: #fff; color: #0875e1; cursor: pointer; }
 .search-field-wrap .search-field { width: 100%; flex: none; }
 .autocomplete-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: max(100%, 250px); max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid #e4ebef; border-radius: 12px; background: #fff; box-shadow: 0 14px 30px #17253620; }
 .autocomplete-option { display: block; width: 100%; padding: 10px 11px; border: 0; border-radius: 8px; background: transparent; color: #34495a; text-align: left; font-size: 12px; cursor: pointer; }
