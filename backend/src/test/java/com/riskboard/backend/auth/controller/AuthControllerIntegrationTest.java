@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,6 +79,22 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"weak@example.com\",\"displayName\":\"Voyageur\",\"password\":\"short\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void permitsTheProductionFrontendOriginForAuthenticationRequests() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .header("Origin", "https://voyageo-app.netlify.app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"invalid\",\"displayName\":\"\",\"password\":\"short\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://voyageo-app.netlify.app"));
+    }
+
+    @Test
+    void doesNotExposeAuthenticationEndpointsForGetRequests() throws Exception {
+        mockMvc.perform(get("/api/auth/register"))
+                .andExpect(status().isMethodNotAllowed());
     }
 
     private String readToken(MvcResult result) throws Exception {

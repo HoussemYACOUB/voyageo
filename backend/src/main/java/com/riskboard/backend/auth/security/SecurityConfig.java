@@ -34,7 +34,7 @@ public class SecurityConfig {
                     response.getWriter().write("{\"message\":\"Authentification requise.\"}");
                 }))
                 .authorizeHttpRequests(auth -> auth
-                    .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                    .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/offers/**").permitAll()
                         .anyRequest().authenticated())
@@ -52,6 +52,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of(
+                "https://voyageo-app.netlify.app",
                 "http://localhost:4200",
                 "http://localhost",
                 "capacitor://localhost"
