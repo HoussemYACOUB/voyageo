@@ -11,6 +11,10 @@ public class TravelProviderGateway {
 
     private final RestClient restClient;
 
+    public TravelProviderGateway() {
+        this(RestClient.builder());
+    }
+
     public TravelProviderGateway(RestClient.Builder restClientBuilder) {
         this.restClient = restClientBuilder.build();
     }
