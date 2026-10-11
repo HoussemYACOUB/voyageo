@@ -169,7 +169,7 @@
           </a>
         }
       </div>
-      <p class="search-note">Les tarifs d’hôtels sont recherchés chez Booking.com pour vos dates et voyageurs ; ils peuvent évoluer. Le forfait gratuit RapidAPI autorise 50 appels par mois, soit environ 25 recherches complètes. Les prix Aviasales restent indicatifs et les offres de démonstration ne sont pas réservables.</p>
+      <p class="search-note">Les recherches d’hôtels et de vols dépendent des quotas et conditions des fournisseurs. Les liens ouvrent leur site : Voyageo ne réalise ni réservation ni paiement.</p>
     </section>
 
     <section class="discovery-section" id="offres" aria-labelledby="discovery-title">
@@ -193,6 +193,10 @@
           </select>
         </label>
       </div>
+
+      @if (priceComparison().length > 1) {
+        <app-price-comparison-chart [items]="priceComparison()" />
+      }
 
       @if (hasDemoOffers()) {
       <div class="demo-notice" role="note">
@@ -263,7 +267,9 @@
 
     <section class="bottom-banner" aria-label="Prix minimum">
       <div class="banner-icon">✦</div><div><strong>Le meilleur prix, sans perdre le plaisir.</strong><span>Comparez les options en un clin d’œil, et gardez vos coups de cœur.</span></div>
-      <span class="banner-price" *ngIf="lowestPrice() !== null">Dès {{ lowestPrice() | currency:'EUR':'symbol':'1.0-0':'fr-FR' }} <small>{{ visibleOffers()[0]?.demo ? 'tarif démo' : 'prix indicatif' }}</small></span>
+      @if (lowestOffer(); as offer) {
+        <span class="banner-price">Dès {{ offer.price | currency:offer.currency:'symbol':'1.0-0':'fr-FR' }} <small>{{ offer.demo ? 'tarif démo' : 'prix indicatif' }}</small></span>
+      }
     </section>
   </main>
 

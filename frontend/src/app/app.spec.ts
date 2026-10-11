@@ -8,7 +8,7 @@ import { TravelOffer, TravelOfferService } from './services/travel-offer.service
 
 const demoOffers: TravelOffer[] = [
   { id: 'train-paris', category: 'TRAIN', title: 'Lyon → Paris', destination: 'Paris', provider: 'Démo', price: 39, currency: 'EUR', details: 'Grande vitesse', rating: 4.6, demo: true },
-  { id: 'flight-rome', category: 'FLIGHT', title: 'Paris → Rome', destination: 'Rome', provider: 'Démo', price: 104, currency: 'EUR', details: 'Vol direct', rating: 4.4, demo: true }
+  { id: 'flight-rome', category: 'FLIGHT', title: 'Paris → Rome', destination: 'Rome', provider: 'Démo', price: 104, currency: 'EUR', details: 'Vol direct', rating: 4.9, demo: true }
 ];
 
 describe('App', () => {
@@ -108,13 +108,32 @@ describe('App', () => {
     expect(service.search).toHaveBeenLastCalledWith('Rome', undefined, 'price');
   });
 
-  it('resorts offers by rating when the sort option changes', () => {
+  it('resorts offers by rating locally without another provider request', () => {
     const select = fixture.nativeElement.querySelector('select[name="sort"]') as HTMLSelectElement;
     select.value = 'rating';
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    expect(service.search).toHaveBeenLastCalledWith('', undefined, 'rating');
+    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card h3') as NodeListOf<HTMLElement>)
+      .map((heading) => heading.textContent?.trim());
+    expect(titles).toEqual(['Paris → Rome', 'Lyon → Paris']);
+    expect(service.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a price chart only for comparable offers in the selected category', () => {
+    service.search.mockReturnValue(of([
+      { id: 'flight-one', category: 'FLIGHT', title: 'Paris → Rome', destination: 'Rome', provider: 'Démo', price: 80, currency: 'EUR', details: 'Vol direct', rating: 4.5, demo: true },
+      { id: 'flight-two', category: 'FLIGHT', title: 'Paris → Lisbonne', destination: 'Lisbonne', provider: 'Démo', price: 120, currency: 'EUR', details: 'Vol direct', rating: 4.4, demo: true }
+    ]));
+
+    const flightFilter = Array.from(fixture.nativeElement.querySelectorAll('.category-chip') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Vols'));
+    flightFilter?.click();
+    fixture.detectChanges();
+
+    const rows = fixture.nativeElement.querySelectorAll('.price-chart-row');
+    expect(rows.length).toBe(2);
+    expect(fixture.nativeElement.querySelector('.price-chart')?.textContent).toContain('Même catégorie · même devise');
   });
 
   it('opens a BlaBlaCar search with the selected route and departure date', () => {

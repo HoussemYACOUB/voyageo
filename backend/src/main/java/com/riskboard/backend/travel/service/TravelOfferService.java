@@ -296,7 +296,7 @@ public class TravelOfferService {
                         String message = exception.getStatusCode().value() == 403
                                         ? "Accès Booking refusé. Activez le forfait Basic gratuit de Booking COM sur RapidAPI et vérifiez la clé RAPIDAPI_KEY du backend."
                                         : exception.getStatusCode().value() == 429
-                                                        ? "Quota RapidAPI atteint. Le forfait gratuit Booking COM est limité à 50 appels par mois."
+                                                        ? "Quota RapidAPI atteint. Consultez les limites actuelles de Booking COM dans votre compte RapidAPI."
                                                         : "Le fournisseur Booking COM a refusé la recherche. Réessayez plus tard.";
                         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, message, exception);
                 } catch (RestClientException exception) {

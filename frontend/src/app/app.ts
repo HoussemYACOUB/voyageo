@@ -1,10 +1,11 @@
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { catchError, debounceTime, distinctUntilChanged, of, skip, switchMap } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { PriceComparisonChart, PriceComparisonItem } from './price-comparison-chart/price-comparison-chart';
 import { AuthService } from './services/auth.service';
 import { CitySuggestion, FlightSearchRoute, HotelSearchCriteria, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
@@ -23,11 +24,12 @@ registerLocaleData(localeFr, 'fr-FR');
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PriceComparisonChart],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly offerService = inject(TravelOfferService);
   private readonly authService = inject(AuthService);
 
@@ -112,7 +114,6 @@ export class App implements OnInit {
   ];
 
   // Cree en contexte d'injection : necessaire pour toObservable()
-  private readonly destinationChanges$ = toObservable(this.destination);
   private readonly originAutocompleteChanges$ = toObservable(this.origin);
   private readonly destinationAutocompleteChanges$ = toObservable(this.destination);
 
@@ -126,7 +127,34 @@ export class App implements OnInit {
       .sort((left, right) => (sort === 'rating' ? right.rating - left.rating : left.price - right.price));
   });
 
-  protected readonly lowestPrice = computed(() => this.visibleOffers()[0]?.price ?? null);
+  protected readonly lowestOffer = computed(() =>
+    this.visibleOffers().reduce<TravelOffer | null>(
+      (lowest, offer) => !lowest || offer.price < lowest.price ? offer : lowest,
+      null
+    )
+  );
+  protected readonly priceComparison = computed<PriceComparisonItem[]>(() => {
+    if (this.activeCategory() === 'ALL') return [];
+
+    const offers = this.visibleOffers().filter((offer) => offer.price > 0);
+    const currency = offers[0]?.currency;
+    const comparableOffers = offers
+      .filter((offer) => offer.currency === currency)
+      .slice()
+      .sort((left, right) => left.price - right.price)
+      .slice(0, 5);
+
+    if (comparableOffers.length < 2) return [];
+
+    const maximumPrice = comparableOffers.at(-1)?.price ?? 0;
+    return comparableOffers.map((offer) => ({
+      id: offer.id,
+      title: offer.title,
+      price: offer.price,
+      currency: offer.currency,
+      width: maximumPrice > 0 ? Math.max(8, Math.round((offer.price / maximumPrice) * 100)) : 0
+    }));
+  });
   protected readonly savedCount = computed(() => this.favorites().size);
   protected readonly visiblePartners = computed(() => {
     const activeCategory = this.activeCategory();
@@ -147,22 +175,28 @@ export class App implements OnInit {
   protected readonly hasDemoOffers = computed(() => this.visibleOffers().some((offer) => offer.demo));
 
   ngOnInit(): void {
-    this.authService.bootstrapSession().subscribe({ error: () => undefined });
-    this.searchOffers();
-    this.offerService.destinations().subscribe({
+    this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => undefined });
+    this.offerService.destinations().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (destinations) => this.destinationSuggestions.set(destinations),
       error: () => this.destinationSuggestions.set([])
     });
-    // Recherche dynamique : relance automatiquement apres une pause de saisie
-    this.destinationChanges$
-      .pipe(debounceTime(450), distinctUntilChanged(), skip(1))
-      .subscribe(() => this.searchOffers());
     this.originAutocompleteChanges$
-      .pipe(debounceTime(250), distinctUntilChanged(), switchMap((query) => this.autocompleteCities(query)))
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((query) => this.autocompleteCities(query)),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe((suggestions) => this.originAutocompleteSuggestions.set(suggestions));
     this.destinationAutocompleteChanges$
-      .pipe(debounceTime(250), distinctUntilChanged(), switchMap((query) => this.autocompleteCities(query)))
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((query) => this.autocompleteCities(query)),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe((suggestions) => this.destinationAutocompleteSuggestions.set(suggestions));
+    this.searchOffers();
   }
 
   private autocompleteCities(query: string) {
@@ -218,6 +252,7 @@ export class App implements OnInit {
         ? this.offerService.search(query, selectedCategory, this.sortBy(), route)
         : this.offerService.search(query, selectedCategory, this.sortBy());
     request
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (offers) => {
           this.offers.set(offers);
@@ -228,7 +263,7 @@ export class App implements OnInit {
           if (category === 'HOTEL' && error.status === 503) {
             this.errorMessage.set(typeof providerMessage === 'string'
               ? providerMessage
-              : 'Accès Booking refusé : activez le forfait Basic gratuit Booking COM dans RapidAPI et vérifiez RAPIDAPI_KEY côté backend (50 appels API/mois, environ 25 recherches).');
+              : 'Accès Booking refusé : vérifiez la clé RAPIDAPI_KEY et le quota du fournisseur Booking COM dans RapidAPI.');
           } else {
             this.errorMessage.set('Impossible de charger les offres. Vérifiez que le serveur est démarré.');
           }
@@ -245,7 +280,6 @@ export class App implements OnInit {
 
   protected selectSort(sort: OfferSort): void {
     this.sortBy.set(sort);
-    this.searchOffers();
   }
 
   /** Raccourci "faciliteur de tache" : remplit la destination et lance la recherche en un clic. */
@@ -413,7 +447,7 @@ export class App implements OnInit {
       ? this.authService.register({ email, password, displayName })
       : this.authService.login({ email, password });
 
-    request$.subscribe({
+    request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.authLoading.set(false);
         this.authPassword.set('');

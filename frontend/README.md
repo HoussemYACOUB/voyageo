@@ -1,6 +1,6 @@
 # Voyageo — application mobile
 
-Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor. L’API Java fournit actuellement un catalogue de démonstration; les prix ne sont ni des tarifs en temps réel ni des offres réservables.
+Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor, avec une API Java pour les offres et les comptes.
 
 ## Prérequis
 
@@ -13,15 +13,19 @@ Interface Angular responsive, empaquetable pour Android et iOS avec Capacitor. L
 
 1. Démarrer l’API depuis `backend/` avec `./mvnw spring-boot:run` (Windows : `mvnw.cmd spring-boot:run`). Elle écoute sur `http://localhost:8080`.
 2. Dans `frontend/`, installer les dépendances avec `npm ci`, puis lancer `npm start`.
-3. Ouvrir `http://localhost:4200`. L’API de démonstration est `GET /api/offers?destination=Paris`.
+3. Ouvrir `http://localhost:4200`. Les offres sont disponibles via `GET /api/offers?destination=Paris`.
 
-## Suggestions et prix de vols
+## Fournisseurs de voyage et quotas
 
-Les champs de ville utilisent l’API publique Travelpayouts/Aviasales pour les suggestions et codes IATA; Geoapify peut la remplacer avec `GEOAPIFY_API_KEY` (forfait gratuit annoncé à 3 000 requêtes/jour, sans carte bancaire). Google Places est proposé en dernier recours et demande une clé Google Maps avec facturation. Les clés sont des variables d’environnement Netlify, jamais du code.
+Les suggestions de villes et codes IATA utilisent Travelpayouts/Aviasales. Geoapify peut être activé avec `GEOAPIFY_API_KEY`; Google Places reste un recours optionnel nécessitant une clé avec facturation. Les clés de ces fonctions Netlify sont des variables d’environnement, jamais du code.
 
-Le backend accepte `TRAVELPAYOUTS_TOKEN` (variable secrète Render) pour demander des tarifs Aviasales pour une route IATA et des dates. L’API Data renvoie des tarifs observés en cache, parfois vieux de 2 à 7 jours: ils sont indicatifs et doivent être revérifiés auprès du partenaire. Sans token, les exemples de vols restent marqués comme démo. Travelpayouts indique ne pas fournir d’API hôtels; les cartes hôtels restent des exemples avec liens partenaires. Google Flights n’a pas d’API publique de tarifs; son lien prérempli est une redirection, pas une comparaison API.
+Le backend accepte `TRAVELPAYOUTS_TOKEN` pour rechercher des tarifs Aviasales par route IATA et dates. Les résultats peuvent être issus d’un cache de plusieurs jours ; ils sont indicatifs et doivent être vérifiés chez le transporteur.
 
-Pour tester les fonctions Netlify en local, copiez `.env.example` vers `.env` dans `frontend/`, puis lancez `npx netlify-cli dev`. Pour les prix Aviasales, configurez `TRAVELPAYOUTS_TOKEN` dans Render.
+Les recherches d’hôtels utilisent Booking.com via Booking COM sur RapidAPI et nécessitent `RAPIDAPI_KEY` côté backend. Le quota gratuit dépend du forfait et des conditions en vigueur chez RapidAPI ; vérifiez-le dans votre compte avant utilisation. Sans identifiants ou dates valides, aucune offre d’hôtel en direct n’est renvoyée.
+
+Ces intégrations fournissent de la recherche et des liens vers les fournisseurs, pas une API de réservation ou de paiement gratuite. Aucune réservation n’est finalisée dans Voyageo. Les tarifs et disponibilités peuvent changer et doivent être confirmés sur le site partenaire.
+
+Pour tester les fonctions Netlify en local, copiez `.env.example` vers `.env` dans `frontend/`, puis lancez `npx netlify-cli dev`. Configurez les secrets des fournisseurs dans l’environnement de déploiement correspondant.
 
 Pour un appareil physique, remplacer l’URL de l’API dans `src/app/services/travel-offer.service.ts` par une adresse joignable en HTTPS (ou l’adresse IP locale de développement); `localhost` désigne le téléphone dans une application native.
 
@@ -36,6 +40,6 @@ Les builds/signatures de production se font dans Android Studio et Xcode. L’ac
 - Interface : `npm test` (tests unitaires Vitest)
 - API et service : `cd backend && ./mvnw test`
 
-## Périmètre de démonstration
+## Limites fonctionnelles
 
-La recherche filtre par destination; les filtres de catégorie et le tri par prix fonctionnent dans l’interface. Les champs de dates et voyageurs sont prêts côté interface mais ne modifient pas encore les exemples. La réservation, les favoris persistants, les prix en direct, les comptes utilisateur et les paiements ne sont pas activés.
+Le tri est appliqué dans l’interface sans nouvel appel fournisseur ; la recherche démarre à la validation du formulaire. Les offres de démonstration sont clairement identifiées et ne sont pas réservables. Les favoris restent en mémoire de la session. Les comptes permettent l’authentification, mais Voyageo ne stocke pas les réservations et ne traite aucun paiement.

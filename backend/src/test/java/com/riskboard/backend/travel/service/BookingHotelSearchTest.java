@@ -160,4 +160,23 @@ class BookingHotelSearchTest {
         assertTrue(exception.getReason().contains("forfait Basic gratuit"));
         server.verify();
     }
+
+    @Test
+    void reportsTheProviderQuotaWithoutAssumingItsCurrentLimit() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        TravelOfferService service = new TravelOfferService(
+                builder, "", "https://booking.test", "test-rapidapi-key", "booking-com15.p.rapidapi.com");
+        String checkIn = LocalDate.now().plusDays(30).toString();
+        String checkOut = LocalDate.now().plusDays(31).toString();
+        server.expect(request -> assertTrue(request.getURI().getPath().endsWith("/searchDestination")))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> service.search(
+                "Paris", OfferCategory.HOTEL, "price", null, null, null, null, checkIn, checkOut, 2));
+
+        assertTrue(exception.getReason().contains("limites actuelles"));
+        assertFalse(exception.getReason().contains("50 appels"));
+        server.verify();
+    }
 }

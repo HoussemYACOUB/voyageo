@@ -1,0 +1,21 @@
+<section class="price-chart" aria-labelledby="price-chart-title">
+  <div class="price-chart-heading">
+    <div>
+      <span class="eyebrow section-eyebrow">COMPARAISON RAPIDE</span>
+      <h3 id="price-chart-title">Les prix en un coup d’œil</h3>
+    </div>
+    <span class="price-chart-caption">Même catégorie · même devise</span>
+  </div>
+  <ol class="price-chart-list">
+    @for (item of items(); track item.id) {
+      <li class="price-chart-row">
+        <span class="price-chart-label">{{ item.title }}</span>
+        <span class="price-bar-track" aria-hidden="true">
+          <span class="price-bar" [style.width.%]="item.width"></span>
+        </span>
+        <strong class="price-chart-value">{{ item.price | currency:item.currency:'symbol':'1.0-2':'fr-FR' }}</strong>
+      </li>
+    }
+  </ol>
+  <p class="price-chart-footnote">Comparaison basée sur les offres affichées ; prix et disponibilités à confirmer chez le fournisseur.</p>
+</section>
