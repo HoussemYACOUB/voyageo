@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
 import { Observable, of, tap } from 'rxjs';
+import { resolveBackendApiRoot } from './api-url';
 
 export interface AuthUser {
   id: number;
@@ -25,21 +25,10 @@ export interface RegisterPayload extends LoginPayload {
 }
 
 // En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
-function resolveAuthBaseUrl(): string {
-  if (Capacitor.isNativePlatform()) {
-    const host = Capacitor.getPlatform() === 'android' ? '10.0.2.2' : 'localhost';
-    return `http://${host}:8080/api/auth`;
-  }
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:8080/api/auth';
-  }
-  return '/api/auth';
-}
-
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
-  private readonly endpoint = resolveAuthBaseUrl();
+  private readonly endpoint = `${resolveBackendApiRoot()}/auth`;
   private readonly storageKey = 'voyageo.auth.token';
 
   protected readonly currentUserSignal = signal<AuthUser | null>(null);

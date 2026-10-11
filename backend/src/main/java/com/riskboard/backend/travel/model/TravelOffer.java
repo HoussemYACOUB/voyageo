@@ -13,6 +13,7 @@ public record TravelOffer(
         String details,
         BigDecimal rating,
         boolean demo,
-        String bookingUrl
+        String bookingUrl,
+        String departureDate
 ) {
 }

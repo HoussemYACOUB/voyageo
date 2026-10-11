@@ -4,6 +4,8 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { App } from './app';
 import { AuthService } from './services/auth.service';
+import { FavoriteService } from './services/favorite.service';
+import { PriceAlertService } from './services/price-alert.service';
 import { TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 const demoOffers: TravelOffer[] = [
@@ -13,7 +15,12 @@ const demoOffers: TravelOffer[] = [
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
-  let service: { search: ReturnType<typeof vi.fn>; destinations: ReturnType<typeof vi.fn>; autocomplete: ReturnType<typeof vi.fn> };
+  let service: {
+    search: ReturnType<typeof vi.fn>;
+    destinations: ReturnType<typeof vi.fn>;
+    autocomplete: ReturnType<typeof vi.fn>;
+    monthlyPrices: ReturnType<typeof vi.fn>;
+  };
   let authService: {
     currentUser: ReturnType<typeof signal>;
     isAuthenticated: ReturnType<typeof signal>;
@@ -22,13 +29,15 @@ describe('App', () => {
     register: ReturnType<typeof vi.fn>;
     logout: ReturnType<typeof vi.fn>;
   };
+  let favoriteService: { list: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     localStorage.clear();
     service = {
       search: vi.fn(() => of(demoOffers)),
       destinations: vi.fn(() => of(['Paris', 'Rome'])),
-      autocomplete: vi.fn(() => of([]))
+      autocomplete: vi.fn(() => of([])),
+      monthlyPrices: vi.fn(() => of([]))
     };
     authService = {
       currentUser: signal(null),
@@ -38,11 +47,21 @@ describe('App', () => {
       register: vi.fn(() => of({ token: 'x', tokenType: 'Bearer', user: { id: 1, email: 'a@b.com', displayName: 'Alex' } })),
       logout: vi.fn()
     };
+    favoriteService = {
+      list: vi.fn(() => of([])),
+      save: vi.fn(() => of(undefined)),
+      remove: vi.fn(() => of(undefined))
+    };
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         { provide: TravelOfferService, useValue: service },
-        { provide: AuthService, useValue: authService }
+        { provide: AuthService, useValue: authService },
+        { provide: FavoriteService, useValue: favoriteService },
+        {
+          provide: PriceAlertService,
+          useValue: { list: vi.fn(() => of([])), create: vi.fn(), remove: vi.fn(), emailAvailable: vi.fn(() => of(false)) }
+        }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(App);
@@ -87,6 +106,31 @@ describe('App', () => {
 
     expect(fixture.nativeElement.querySelector('.favorite-count')?.textContent).toContain('1');
     expect(favoriteButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('persists favorite offers on the signed-in account', () => {
+    const account = { id: 1, email: 'alex@example.com', displayName: 'Alex Voyageur' };
+    authService.currentUser.set(account);
+    authService.isAuthenticated.set(true);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(favoriteService.save).toHaveBeenCalledWith(demoOffers[0]);
+    expect(fixture.nativeElement.querySelector('.favorite-count')?.textContent).toContain('1');
+  });
+
+  it('loads saved account offers when opening the signed-in favorites view', () => {
+    const account = { id: 1, email: 'alex@example.com', displayName: 'Alex Voyageur' };
+    authService.currentUser.set(account);
+    authService.isAuthenticated.set(true);
+    favoriteService.list.mockReturnValue(of([demoOffers[1]]));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.favorites-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card)').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.offer-card:not(.inspiration-card) h3')?.textContent).toContain('Paris → Rome');
   });
 
   it('restores saved favorites after the app is reloaded', () => {

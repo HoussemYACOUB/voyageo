@@ -2,6 +2,7 @@ package com.riskboard.backend.travel.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +26,33 @@ import com.riskboard.backend.travel.model.OfferCategory;
 import com.riskboard.backend.travel.model.TravelOffer;
 
 class BookingHotelSearchTest {
+
+    @Test
+    void returnsRealCalendarPricesForTheRequestedMonth() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        TravelOfferService service = new TravelOfferService(
+                builder, "test-travelpayouts-token", "", "", "");
+        String month = YearMonth.now().plusMonths(2).toString();
+        LocalDate departure = YearMonth.parse(month).atDay(12);
+
+        server.expect(request -> assertTrue(request.getURI().getHost().equals("api.travelpayouts.com")))
+                .andExpect(queryParam("origin", "PAR"))
+                .andExpect(queryParam("destination", "LIS"))
+                .andExpect(queryParam("departure_at", month))
+                .andExpect(header("X-Access-Token", "test-travelpayouts-token"))
+                .andRespond(withSuccess("""
+                        {"success":true,"currency":"eur","data":[{"price":98,"origin_name":"Paris","destination_name":"Lisbonne","departure_at":"%sT08:30:00+01:00","airline":"TP","transfers":0,"link":"/search/PAR-LIS"}]}
+                        """.formatted(departure), MediaType.APPLICATION_JSON));
+
+        var prices = service.searchFlightMonth("PAR", "LIS", "Lisbonne", month);
+
+        assertEquals(1, prices.size());
+        assertEquals(departure, prices.getFirst().departureDate());
+        assertEquals(new BigDecimal("98"), prices.getFirst().price());
+        assertEquals("EUR", prices.getFirst().currency());
+        server.verify();
+    }
 
     @Test
     void fetchesLiveBookingPricesForSelectedDatesAndGuests() {

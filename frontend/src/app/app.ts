@@ -5,8 +5,12 @@ import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angula
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, map, of, Subscription, switchMap } from 'rxjs';
+import { FavoriteToggle } from './favorite-toggle/favorite-toggle';
+import { MonthlyDateCalendar } from './monthly-date-calendar/monthly-date-calendar';
 import { PriceComparisonChart, PriceComparisonItem } from './price-comparison-chart/price-comparison-chart';
+import { PriceAlertPanel } from './price-alert-panel/price-alert-panel';
 import { AuthService } from './services/auth.service';
+import { FavoriteService } from './services/favorite.service';
 import { CitySuggestion, FlightSearchRoute, HotelSearchCriteria, OfferCategory, OfferSort, TravelOffer, TravelOfferService } from './services/travel-offer.service';
 
 type CategoryFilter = 'ALL' | OfferCategory;
@@ -51,7 +55,7 @@ function normalizeCityQuery(value: string): string {
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, PriceComparisonChart],
+  imports: [CommonModule, FormsModule, PriceComparisonChart, FavoriteToggle, MonthlyDateCalendar, PriceAlertPanel],
   templateUrl: './app.html',
   styleUrls: ['./app.scss', './auth.scss']
 })
@@ -59,6 +63,7 @@ export class App implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly offerService = inject(TravelOfferService);
   private readonly authService = inject(AuthService);
+  private readonly favoriteService = inject(FavoriteService);
   private activeSearch?: Subscription;
 
   protected readonly destination = signal('');
@@ -77,8 +82,18 @@ export class App implements OnInit {
   protected readonly activeCategory = signal<CategoryFilter>('ALL');
   protected readonly sortBy = signal<OfferSort>('price');
   protected readonly offers = signal<TravelOffer[]>([]);
+  protected readonly accountFavoriteOffers = signal<TravelOffer[]>([]);
   protected readonly favorites = signal<Set<string>>(new Set());
   protected readonly favoritesOnly = signal(false);
+  protected readonly currentFlightRoute = computed<FlightSearchRoute | null>(() => {
+    if (!this.originIata() || !this.destinationIata() || !this.departureDate()) return null;
+    return {
+      originIata: this.originIata(),
+      destinationIata: this.destinationIata(),
+      departureDate: this.departureDate(),
+      returnDate: this.tripType() === 'ROUND_TRIP' ? this.returnDate() || undefined : undefined
+    };
+  });
   protected readonly loading = signal(false);
   protected readonly errorMessage = signal('');
   protected readonly destinationSuggestions = signal<string[]>([]);
@@ -198,7 +213,10 @@ export class App implements OnInit {
   protected readonly visibleOffers = computed(() => {
     const category = this.activeCategory();
     const sort = this.sortBy();
-    return this.offers()
+    const offers = this.favoritesOnly() && this.isAuthenticated()
+      ? this.accountFavoriteOffers()
+      : this.offers();
+    return offers
       .filter((offer) => category === 'ALL' || offer.category === category)
       .filter((offer) => !this.favoritesOnly() || this.favorites().has(offer.id))
       .slice()
@@ -254,7 +272,12 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     this.restoreFavorites();
-    this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => undefined });
+    this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (user) => {
+        if (user) this.loadAccountFavorites();
+      },
+      error: () => undefined
+    });
     this.offerService.destinations().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (destinations) => this.destinationSuggestions.set(destinations),
       error: () => this.destinationSuggestions.set([])
@@ -481,12 +504,33 @@ export class App implements OnInit {
 
   protected toggleFavoritesView(): void {
     this.favoritesOnly.update((current) => !current);
+    if (this.favoritesOnly() && this.isAuthenticated()) this.loadAccountFavorites();
   }
 
-  protected toggleFavorite(id: string): void {
+  protected toggleFavorite(offer: TravelOffer): void {
+    if (this.isAuthenticated()) {
+      const isSaved = this.favorites().has(offer.id);
+      const request = isSaved ? this.favoriteService.remove(offer.id) : this.favoriteService.save(offer);
+      request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: () => {
+          this.favorites.update((current) => {
+            const next = new Set(current);
+            if (isSaved) next.delete(offer.id);
+            else next.add(offer.id);
+            return next;
+          });
+          this.accountFavoriteOffers.update((current) =>
+            isSaved ? current.filter((item) => item.id !== offer.id) : [offer, ...current]
+          );
+        },
+        error: () => this.errorMessage.set('Impossible de mettre à jour vos favoris. Réessayez.')
+      });
+      return;
+    }
+
     const next = new Set(this.favorites());
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(offer.id)) next.delete(offer.id);
+    else next.add(offer.id);
     this.favorites.set(next);
     this.persistFavorites(next);
   }
@@ -506,6 +550,12 @@ export class App implements OnInit {
 
   protected isFavorite(id: string): boolean {
     return this.favorites().has(id);
+  }
+
+  protected selectCalendarDate(date: string): void {
+    this.departureDate.set(date);
+    if (this.returnDate() && this.returnDate() <= date) this.returnDate.set('');
+    this.searchOffers();
   }
 
   protected categoryLabel(category: OfferCategory): string {
@@ -666,6 +716,7 @@ export class App implements OnInit {
         this.authLoading.set(false);
         this.authPassword.set('');
         this.authOpen.set(false);
+        this.loadAccountFavorites();
       },
       error: (error: HttpErrorResponse) => {
         this.authLoading.set(false);
@@ -677,5 +728,18 @@ export class App implements OnInit {
 
   protected logout(): void {
     this.authService.logout();
+    this.accountFavoriteOffers.set([]);
+    this.favorites.set(new Set());
+    this.restoreFavorites();
+  }
+
+  private loadAccountFavorites(): void {
+    this.favoriteService.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (offers) => {
+        this.accountFavoriteOffers.set(offers);
+        this.favorites.set(new Set(offers.map((offer) => offer.id)));
+      },
+      error: () => this.errorMessage.set('Impossible de charger les favoris de votre compte.')
+    });
   }
 }

@@ -31,7 +31,7 @@
           <div class="profile-summary">
             <strong>{{ account.displayName }}</strong>
             <span>{{ account.email }}</span>
-            <span>{{ savedCount() }} favori{{ savedCount() === 1 ? '' : 's' }} enregistré{{ savedCount() === 1 ? '' : 's' }} sur cet appareil</span>
+            <span>{{ savedCount() }} favori{{ savedCount() === 1 ? '' : 's' }} enregistré{{ savedCount() === 1 ? '' : 's' }} sur votre compte</span>
           </div>
           <div class="profile-actions">
             <button type="button" class="auth-submit" (click)="toggleFavoritesView(); closeAuth()">Voir mes favoris</button>
@@ -202,6 +202,13 @@
         }
       </div>
       <p class="search-note">Les recherches d’hôtels et de vols dépendent des quotas et conditions des fournisseurs. Les liens ouvrent leur site : Voyageo ne réalise ni réservation ni paiement.</p>
+      @if (activeCategory() === 'FLIGHT' && originIata() && destinationIata()) {
+        <app-monthly-date-calendar [originIata]="originIata()" [destinationIata]="destinationIata()"
+          [destination]="destination()" [selectedDate]="departureDate()" (dateSelected)="selectCalendarDate($event)" />
+      }
+      @if (isAuthenticated()) {
+        <app-price-alert-panel [route]="currentFlightRoute()" [destination]="destination()" />
+      }
     </section>
 
     <section class="discovery-section inspiration-section" aria-labelledby="inspiration-title">
@@ -302,7 +309,7 @@
               <div class="offer-art" [attr.data-category]="offer.category">
                 <img class="art-photo" [src]="offerImageUrl(offer)" [alt]="offer.destination + ' - ' + categoryLabel(offer.category)" loading="lazy" decoding="async" (error)="onOfferImageError($event)">
                 <span class="art-label">{{ categoryLabel(offer.category) }}</span>
-                <button class="save-button" type="button" [attr.aria-label]="isFavorite(offer.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'" [attr.aria-pressed]="isFavorite(offer.id)" (click)="toggleFavorite(offer.id)">{{ isFavorite(offer.id) ? '♥' : '♡' }}</button>
+                <app-favorite-toggle [saved]="isFavorite(offer.id)" (toggle)="toggleFavorite(offer)" />
               </div>
               <div class="offer-content">
                 <div class="offer-title-row"><div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div>@if (offer.rating > 0) { <span class="rating">★ {{ offer.rating | number:'1.1-1' }}</span> }</div>

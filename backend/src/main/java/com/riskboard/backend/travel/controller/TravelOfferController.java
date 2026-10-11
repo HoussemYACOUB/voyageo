@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.riskboard.backend.travel.model.OfferCategory;
 import com.riskboard.backend.travel.model.TravelOffer;
+import com.riskboard.backend.travel.dto.MonthlyFlightPrice;
 import com.riskboard.backend.travel.service.TravelOfferService;
 
 @RestController
@@ -43,5 +44,15 @@ public class TravelOfferController {
     @GetMapping("/destinations")
     public List<String> destinations() {
         return offerService.listDestinations();
+    }
+
+    @GetMapping("/calendar")
+    public List<MonthlyFlightPrice> calendarPrices(
+            @RequestParam String originIata,
+            @RequestParam String destinationIata,
+            @RequestParam String destination,
+            @RequestParam String month
+    ) {
+        return offerService.searchFlightMonth(originIata, destinationIata, destination, month);
     }
 }

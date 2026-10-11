@@ -81,6 +81,19 @@ describe('TravelOfferService', () => {
     request.flush(['Lyon', 'Paris']);
   });
 
+  it('requests real monthly flight prices using the selected airport codes', () => {
+    service.monthlyPrices('PAR', 'LIS', 'Lisbonne, Portugal', '2026-11').subscribe((prices) =>
+      expect(prices).toEqual([{ departureDate: '2026-11-12', price: 98, currency: 'EUR' }])
+    );
+
+    const request = http.expectOne((candidate) => candidate.url === 'http://localhost:8080/api/offers/calendar');
+    expect(request.request.params.get('originIata')).toBe('PAR');
+    expect(request.request.params.get('destinationIata')).toBe('LIS');
+    expect(request.request.params.get('destination')).toBe('Lisbonne, Portugal');
+    expect(request.request.params.get('month')).toBe('2026-11');
+    request.flush([{ departureDate: '2026-11-12', price: 98, currency: 'EUR' }]);
+  });
+
   it('uses the deployed autocomplete function during Angular local development', () => {
     service.autocomplete('Lisbon').subscribe((suggestions) => {
       expect(suggestions).toEqual([{ text: 'Lisbon, Portugal', placeId: 'place-id', provider: 'google' }]);

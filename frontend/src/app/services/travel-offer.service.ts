@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
 import { map, Observable } from 'rxjs';
+import { resolveBackendApiRoot } from './api-url';
 
 export type OfferCategory = 'HOTEL' | 'FLIGHT' | 'TRAIN' | 'CAR' | 'CARPOOL';
 export type OfferSort = 'price' | 'rating';
@@ -18,6 +18,13 @@ export interface TravelOffer {
   rating: number;
   demo: boolean;
   bookingUrl?: string | null;
+  departureDate?: string | null;
+}
+
+export interface MonthlyFlightPrice {
+  departureDate: string;
+  price: number;
+  currency: string;
 }
 
 export interface CitySuggestion {
@@ -41,20 +48,8 @@ export interface HotelSearchCriteria {
   adults: number;
 }
 
-// En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
-function resolveApiBaseUrl(): string {
-  if (Capacitor.isNativePlatform()) {
-    const host = Capacitor.getPlatform() === 'android' ? '10.0.2.2' : 'localhost';
-    return `http://${host}:8080/api/offers`;
-  }
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:8080/api/offers';
-  }
-  return '/api/offers';
-}
-
 function resolveAutocompleteUrl(): string {
-  if (Capacitor.isNativePlatform()) {
+  if (typeof window !== 'undefined' && window.location.protocol === 'capacitor:') {
     return 'https://voyageo-app.netlify.app/api/places/autocomplete';
   }
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
@@ -66,7 +61,7 @@ function resolveAutocompleteUrl(): string {
 @Injectable({ providedIn: 'root' })
 export class TravelOfferService {
   private readonly http = inject(HttpClient);
-  private readonly endpoint = resolveApiBaseUrl();
+  private readonly endpoint = `${resolveBackendApiRoot()}/offers`;
   private readonly autocompleteEndpoint = resolveAutocompleteUrl();
 
   search(destination: string, category?: OfferCategory, sort?: OfferSort, route?: FlightSearchRoute, hotel?: HotelSearchCriteria): Observable<TravelOffer[]> {
@@ -99,5 +94,14 @@ export class TravelOfferService {
     return this.http.get<{ suggestions?: CitySuggestion[] }>(this.autocompleteEndpoint, { params }).pipe(
       map((response) => response.suggestions ?? [])
     );
+  }
+
+  monthlyPrices(originIata: string, destinationIata: string, destination: string, month: string): Observable<MonthlyFlightPrice[]> {
+    const params = new HttpParams()
+      .set('originIata', originIata)
+      .set('destinationIata', destinationIata)
+      .set('destination', destination)
+      .set('month', month);
+    return this.http.get<MonthlyFlightPrice[]>(`${this.endpoint}/calendar`, { params });
   }
 }

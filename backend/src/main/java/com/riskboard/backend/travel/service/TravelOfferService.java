@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -26,6 +25,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.riskboard.backend.travel.dto.MonthlyFlightPrice;
 import com.riskboard.backend.travel.model.OfferCategory;
 import com.riskboard.backend.travel.model.TravelOffer;
 
@@ -35,7 +35,7 @@ public class TravelOfferService {
         private static final String BOOKING_DESTINATION_PATH = "/api/v1/hotels/searchDestination";
         private static final String BOOKING_HOTELS_PATH = "/api/v1/hotels/searchHotels";
 
-        private final RestClient restClient;
+        private final TravelProviderGateway providerGateway;
         private final ObjectMapper objectMapper = new ObjectMapper();
         private final String travelPayoutsToken;
         private final String bookingApiBaseUrl;
@@ -47,12 +47,17 @@ public class TravelOfferService {
 
         @Autowired
         TravelOfferService(
+                        TravelProviderGateway providerGateway,
                         @Value("${providers.travelpayouts.token:}") String travelPayoutsToken,
                         @Value("${providers.booking.base-url:https://booking-com15.p.rapidapi.com}") String bookingApiBaseUrl,
                         @Value("${providers.booking.rapidapi-key:}") String rapidApiKey,
                         @Value("${providers.booking.rapidapi-host:booking-com15.p.rapidapi.com}") String rapidApiHost
         ) {
-                this(RestClient.create(), travelPayoutsToken, bookingApiBaseUrl, rapidApiKey, rapidApiHost);
+                this.providerGateway = providerGateway;
+                this.travelPayoutsToken = travelPayoutsToken;
+                this.bookingApiBaseUrl = normalizeBaseUrl(bookingApiBaseUrl);
+                this.rapidApiKey = rapidApiKey;
+                this.rapidApiHost = rapidApiHost;
         }
 
         TravelOfferService(
@@ -62,25 +67,11 @@ public class TravelOfferService {
                         String rapidApiKey,
                         String rapidApiHost
         ) {
-                this(restClientBuilder.build(), travelPayoutsToken, bookingApiBaseUrl, rapidApiKey, rapidApiHost);
-        }
-
-        private TravelOfferService(
-                        RestClient restClient,
-                        String travelPayoutsToken,
-                        String bookingApiBaseUrl,
-                        String rapidApiKey,
-                        String rapidApiHost
-        ) {
-                this.restClient = restClient;
-                this.travelPayoutsToken = travelPayoutsToken;
-                this.bookingApiBaseUrl = normalizeBaseUrl(bookingApiBaseUrl);
-                this.rapidApiKey = rapidApiKey;
-                this.rapidApiHost = rapidApiHost;
+                this(new TravelProviderGateway(restClientBuilder), travelPayoutsToken, bookingApiBaseUrl, rapidApiKey, rapidApiHost);
         }
 
         TravelOfferService() {
-                this(RestClient.create(), "", "", "", "");
+                this(new TravelProviderGateway(RestClient.builder()), "", "", "", "");
         }
 
     private static final List<TravelOffer> DEMO_OFFERS = List.of(
@@ -166,6 +157,33 @@ public class TravelOfferService {
                 .toList();
     }
 
+    public List<MonthlyFlightPrice> searchFlightMonth(
+            String originIata,
+            String destinationIata,
+            String destination,
+            String month
+    ) {
+        if (!isIataCode(originIata) || !isIataCode(destinationIata) || !hasText(destination)
+                        || !isValidTravelMonth(month)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trajet ou mois invalide.");
+        }
+        if (!hasText(travelPayoutsToken)) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Le calendrier des tarifs nécessite la configuration du fournisseur Aviasales.");
+        }
+        return fetchFlightOffers(destination, originIata, destinationIata, month, null, OfferCategory.FLIGHT)
+                .stream()
+                .filter(offer -> !offer.demo() && offer.departureDate() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        offer -> LocalDate.parse(offer.departureDate()),
+                        offer -> offer,
+                        (first, second) -> first.price().compareTo(second.price()) <= 0 ? first : second,
+                        java.util.TreeMap::new))
+                .values().stream()
+                .map(offer -> new MonthlyFlightPrice(LocalDate.parse(offer.departureDate()), offer.price(), offer.currency()))
+                .toList();
+    }
+
     private static Comparator<TravelOffer> resolveComparator(String sort) {
         if ("rating".equalsIgnoreCase(sort)) {
             return Comparator.comparing(TravelOffer::rating).reversed().thenComparing(TravelOffer::id);
@@ -183,7 +201,7 @@ public class TravelOfferService {
         ) {
                 if (category != null && category != OfferCategory.FLIGHT) return List.of();
                 if (!hasText(travelPayoutsToken) || !isIataCode(originIata) || !isIataCode(destinationIata)
-                                || !isValidTravelDate(departureDate)) return List.of();
+                                || !(isValidTravelDate(departureDate) || isValidTravelMonth(departureDate))) return List.of();
 
                 try {
                         UriComponentsBuilder uri = UriComponentsBuilder
@@ -199,12 +217,8 @@ public class TravelOfferService {
                                 uri.queryParam("return_at", returnDate);
                         }
 
-                        String body = restClient.get()
-                                        .uri(URI.create(uri.build().encode().toUriString()))
-                                        .header("X-Access-Token", travelPayoutsToken.trim())
-                                        .accept(MediaType.APPLICATION_JSON)
-                                        .retrieve()
-                                        .body(String.class);
+                        String body = providerGateway.fetchFlightPrices(
+                                        URI.create(uri.build().encode().toUriString()), travelPayoutsToken);
                         if (!hasText(body)) return List.of();
 
                         JsonNode root = objectMapper.readTree(body);
@@ -221,9 +235,12 @@ public class TravelOfferService {
                                 String stops = result.path("transfers").isNumber()
                                                 ? result.path("transfers").asText() + " escale(s)"
                                                 : "Itinéraire selon disponibilité";
-                                String departure = result.path("departure_at").asText(departureDate);
+                                String departureTimestamp = result.path("departure_at").asText(departureDate);
+                                String departure = departureTimestamp.length() >= 10
+                                                ? departureTimestamp.substring(0, 10)
+                                                : departureTimestamp;
                                 String foundAt = result.path("found_at").asText("");
-                                String details = "Départ " + departure + " · " + stops
+                                String details = "Départ " + departureTimestamp + " · " + stops
                                                 + (hasText(airline) ? " · compagnie " + airline : "")
                                                 + (hasText(foundAt) ? " · relevé " + foundAt : "")
                                                 + " · tarif indicatif issu du cache Aviasales, à revérifier";
@@ -243,7 +260,8 @@ public class TravelOfferService {
                                                 details,
                                                 BigDecimal.ZERO,
                                                 false,
-                                                bookingUrl
+                                                bookingUrl,
+                                                departure
                                 ));
                         }
                         return offers;
@@ -308,13 +326,7 @@ public class TravelOfferService {
         }
 
         private JsonNode getBookingApiResponse(URI uri) throws JsonProcessingException {
-                String body = restClient.get()
-                                .uri(uri)
-                                .header("X-RapidAPI-Key", rapidApiKey.trim())
-                                .header("X-RapidAPI-Host", rapidApiHost.trim())
-                                .accept(MediaType.APPLICATION_JSON)
-                                .retrieve()
-                                .body(String.class);
+                String body = providerGateway.fetchBookingResponse(uri, rapidApiKey, rapidApiHost);
                 if (!hasText(body)) return objectMapper.createObjectNode();
                 return objectMapper.readTree(body);
         }
@@ -365,7 +377,8 @@ public class TravelOfferService {
                                         "Du " + checkIn + " au " + checkOut + " · " + nights + " nuit(s) · tarif consulté sur Booking.com, à revérifier",
                                         rating,
                                         false,
-                                        safeBookingUrl(directUrl)
+                                        safeBookingUrl(directUrl),
+                                        null
                         ));
                         if (offers.size() == 10) break;
                 }
@@ -474,6 +487,15 @@ public class TravelOfferService {
                 }
         }
 
+        private static boolean isValidTravelMonth(String value) {
+                if (value == null || !value.matches("\\d{4}-\\d{2}")) return false;
+                try {
+                        return !java.time.YearMonth.parse(value).isBefore(java.time.YearMonth.now());
+                } catch (RuntimeException exception) {
+                        return false;
+                }
+        }
+
         private static boolean hasText(String value) {
                 return value != null && !value.isBlank();
         }
@@ -498,6 +520,6 @@ public class TravelOfferService {
             String price
     ) {
         return new TravelOffer(id, category, title, destination, provider,
-                new BigDecimal(price), "EUR", details, new BigDecimal(rating), true, null);
+                new BigDecimal(price), "EUR", details, new BigDecimal(rating), true, null, null);
     }
 }
