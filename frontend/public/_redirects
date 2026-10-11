@@ -1,0 +1,3 @@
+/api/places/autocomplete  /.netlify/functions/places-autocomplete  200!
+/api/*  https://voyageo-backend.onrender.com/api/:splat  200!
+/*  /index.html  200
