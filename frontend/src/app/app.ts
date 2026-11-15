@@ -126,6 +126,8 @@ export class App implements OnInit {
   protected readonly tripType = signal<TripType>('ROUND_TRIP');
   protected readonly activeCategory = signal<CategoryFilter>('ALL');
   protected readonly sortBy = signal<OfferSort>('price');
+  protected readonly budgetCeiling = signal<number | null>(null);
+  protected readonly budgetCurrency = signal('EUR');
   protected readonly offers = signal<TravelOffer[]>([]);
   protected readonly recentSearches = signal<RecentSearch[]>([]);
   protected readonly accountFavoriteOffers = signal<TravelOffer[]>([]);
@@ -256,15 +258,34 @@ export class App implements OnInit {
   private readonly originAutocompleteChanges$ = toObservable(this.origin);
   private readonly destinationAutocompleteChanges$ = toObservable(this.destination);
 
-  protected readonly visibleOffers = computed(() => {
+  protected readonly budgetCandidates = computed(() => {
     const category = this.activeCategory();
-    const sort = this.sortBy();
     const offers = this.favoritesOnly() && this.isAuthenticated()
       ? this.accountFavoriteOffers()
       : this.offers();
     return offers
       .filter((offer) => category === 'ALL' || offer.category === category)
-      .filter((offer) => !this.favoritesOnly() || this.favorites().has(offer.id))
+      .filter((offer) => !this.favoritesOnly() || this.favorites().has(offer.id));
+  });
+  protected readonly availableBudgetCurrencies = computed(() =>
+    [...new Set(this.budgetCandidates().map((offer) => offer.currency))].sort()
+  );
+  protected readonly activeBudgetCurrency = computed(() => {
+    const currencies = this.availableBudgetCurrencies();
+    return currencies.includes(this.budgetCurrency()) ? this.budgetCurrency() : currencies[0] ?? 'EUR';
+  });
+  protected readonly budgetRangeMaximum = computed(() => {
+    const maximumPrice = this.budgetCandidates()
+      .filter((offer) => offer.currency === this.activeBudgetCurrency())
+      .reduce((maximum, offer) => Math.max(maximum, offer.price), 0);
+    return Math.max(10, Math.ceil(maximumPrice / 10) * 10);
+  });
+  protected readonly visibleOffers = computed(() => {
+    const budget = this.budgetCeiling();
+    const currency = this.activeBudgetCurrency();
+    const sort = this.sortBy();
+    return this.budgetCandidates()
+      .filter((offer) => budget === null || (offer.currency === currency && offer.price <= budget))
       .slice()
       .sort((left, right) => (sort === 'rating' ? right.rating - left.rating : left.price - right.price));
   });
@@ -614,6 +635,19 @@ export class App implements OnInit {
 
   protected selectSort(sort: OfferSort): void {
     this.sortBy.set(sort);
+  }
+
+  protected updateBudgetCeiling(event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value) && value >= 0) this.budgetCeiling.set(value);
+  }
+
+  protected selectBudgetCurrency(currency: string): void {
+    this.budgetCurrency.set(currency);
+  }
+
+  protected clearBudgetFilter(): void {
+    this.budgetCeiling.set(null);
   }
 
   protected selectInspirationCategory(category: 'FLIGHT' | 'HOTEL'): void {

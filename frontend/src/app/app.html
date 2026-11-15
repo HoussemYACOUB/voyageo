@@ -291,6 +291,28 @@
             <span>{{ category.icon }}</span>{{ category.label }}
           </button>
         }
+        @if (availableBudgetCurrencies().length > 0) {
+          <label class="sort-select">
+            <span>Budget max. :</span>
+            <input class="budget-range" type="range" min="0" step="10" [max]="budgetRangeMaximum()"
+              [value]="budgetCeiling() ?? budgetRangeMaximum()" (input)="updateBudgetCeiling($event)"
+              aria-label="Budget maximum par offre">
+            <output>{{ (budgetCeiling() ?? budgetRangeMaximum()) | currency:activeBudgetCurrency():'symbol':'1.0-0':'fr-FR' }}</output>
+          </label>
+          @if (availableBudgetCurrencies().length > 1) {
+            <label class="sort-select">
+              <span>Devise :</span>
+              <select [ngModel]="activeBudgetCurrency()" (ngModelChange)="selectBudgetCurrency($event)" aria-label="Devise du budget">
+                @for (currency of availableBudgetCurrencies(); track currency) {
+                  <option [value]="currency">{{ currency }}</option>
+                }
+              </select>
+            </label>
+          }
+          @if (budgetCeiling() !== null) {
+            <button type="button" class="category-chip" (click)="clearBudgetFilter()">Effacer le budget</button>
+          }
+        }
         <label class="sort-select">
           <span>Trier :</span>
           <select [ngModel]="sortBy()" (ngModelChange)="selectSort($event)" name="sort" aria-label="Trier les offres">
@@ -300,6 +322,9 @@
           </select>
         </label>
       </div>
+      @if (budgetCeiling() !== null && availableBudgetCurrencies().length > 1) {
+        <p class="search-note" role="status">Pour éviter de comparer des montants dans des devises différentes, seules les offres en {{ activeBudgetCurrency() }} sont affichées avec le budget actif.</p>
+      }
 
       @if (priceComparison().length > 1) {
         <app-price-comparison-chart [items]="priceComparison()" />
@@ -317,7 +342,13 @@
       } @else if (loading() && offers().length === 0) {
         <div class="state-message" role="status"><span class="loader"></span><p>On prépare de belles idées pour vous…</p></div>
       } @else if (visibleOffers().length === 0) {
-        @if (activeCategory() === 'HOTEL') {
+        @if (budgetCeiling() !== null) {
+          <div class="state-message" role="status">
+            <span>€</span>
+            <p>Aucune offre ne correspond à votre budget maximum de {{ budgetCeiling() | currency:activeBudgetCurrency():'symbol':'1.0-0':'fr-FR' }}.</p>
+            <button class="category-chip" type="button" (click)="clearBudgetFilter()">Afficher toutes les offres</button>
+          </div>
+        } @else if (activeCategory() === 'HOTEL') {
           <div class="state-message hotel-search-state">
             <span>⌂</span>
             <div>

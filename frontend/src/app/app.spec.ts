@@ -103,6 +103,48 @@ describe('App', () => {
     expect(fixture.nativeElement.querySelector('.offer-card:not(.inspiration-card) h3')?.textContent).toContain('Lyon → Paris');
   });
 
+  it('filters offers by a maximum budget and can clear the filter', () => {
+    const budget = fixture.nativeElement.querySelector('.budget-range') as HTMLInputElement;
+    budget.value = '50';
+    budget.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card)').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.offer-card:not(.inspiration-card) h3')?.textContent).toContain('Lyon → Paris');
+
+    const clearBudget = Array.from(fixture.nativeElement.querySelectorAll('.category-list button') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Effacer le budget'));
+    clearBudget?.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card)').length).toBe(2);
+  });
+
+  it('keeps budget filtering within the selected currency', () => {
+    const dollarOffers: TravelOffer[] = [
+      { id: 'usd-budget', category: 'FLIGHT', title: 'Vol en dollars', destination: 'New York', provider: 'Test', price: 35, currency: 'USD', details: 'Vol direct', rating: 4.2, demo: true },
+      { id: 'usd-over-budget', category: 'FLIGHT', title: 'Vol hors budget', destination: 'Boston', provider: 'Test', price: 75, currency: 'USD', details: 'Vol direct', rating: 4.1, demo: true }
+    ];
+    service.search.mockReturnValue(of([...demoOffers, ...dollarOffers]));
+    fixture.componentInstance['searchOffers']();
+    fixture.detectChanges();
+
+    const currency = fixture.nativeElement.querySelector('select[aria-label="Devise du budget"]') as HTMLSelectElement;
+    currency.value = 'USD';
+    currency.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const budget = fixture.nativeElement.querySelector('.budget-range') as HTMLInputElement;
+    budget.value = '50';
+    budget.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const titles = Array.from(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card) h3') as NodeListOf<HTMLElement>)
+      .map((heading) => heading.textContent?.trim());
+    expect(titles).toEqual(['Vol en dollars']);
+    expect(fixture.nativeElement.querySelector('.search-note[role="status"]')?.textContent).toContain('seules les offres en USD');
+  });
+
   it('adds an offer to favorites and updates the counter', () => {
     const favoriteButton = fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement;
     favoriteButton.click();
