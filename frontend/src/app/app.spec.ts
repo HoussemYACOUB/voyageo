@@ -27,6 +27,8 @@ describe('App', () => {
     bootstrapSession: ReturnType<typeof vi.fn>;
     login: ReturnType<typeof vi.fn>;
     register: ReturnType<typeof vi.fn>;
+    updateProfile: ReturnType<typeof vi.fn>;
+    changePassword: ReturnType<typeof vi.fn>;
     logout: ReturnType<typeof vi.fn>;
   };
   let favoriteService: { list: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
@@ -45,6 +47,8 @@ describe('App', () => {
       bootstrapSession: vi.fn(() => of(null)),
       login: vi.fn(() => of({ token: 'x', tokenType: 'Bearer', user: { id: 1, email: 'a@b.com', displayName: 'Alex' } })),
       register: vi.fn(() => of({ token: 'x', tokenType: 'Bearer', user: { id: 1, email: 'a@b.com', displayName: 'Alex' } })),
+      updateProfile: vi.fn((displayName: string) => of({ id: 1, email: 'alex@example.com', displayName })),
+      changePassword: vi.fn(() => of(undefined)),
       logout: vi.fn()
     };
     favoriteService = {
@@ -186,6 +190,47 @@ describe('App', () => {
 
     expect(fixture.nativeElement.querySelector('.profile-summary')?.textContent).toContain('alex@example.com');
     expect(fixture.nativeElement.querySelector('.profile-actions')?.textContent).toContain('Voir mes favoris');
+  });
+
+  it('submits a profile name update from the account panel', () => {
+    const account = { id: 1, email: 'alex@example.com', displayName: 'Alex Voyageur' };
+    authService.currentUser.set(account);
+    authService.isAuthenticated.set(true);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.profile-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    fixture.componentInstance['profileDisplayName'].set('Alex Martin');
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.profile-form') as HTMLFormElement)
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(authService.updateProfile).toHaveBeenCalledWith('Alex Martin');
+    expect(fixture.nativeElement.querySelector('.auth-success')?.textContent).toContain('profil a été mis à jour');
+  });
+
+  it('submits the current and new password to the authenticated password endpoint', () => {
+    const account = { id: 1, email: 'alex@example.com', displayName: 'Alex Voyageur' };
+    authService.currentUser.set(account);
+    authService.isAuthenticated.set(true);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.profile-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    fixture.componentInstance['profilePassword'].set('old-password');
+    fixture.componentInstance['newPassword'].set('a-new-secure-password');
+    fixture.detectChanges();
+    (Array.from(fixture.nativeElement.querySelectorAll('.profile-form'))[1] as HTMLFormElement)
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(authService.changePassword).toHaveBeenCalledWith({
+      currentPassword: 'old-password',
+      newPassword: 'a-new-secure-password'
+    });
+    expect(fixture.nativeElement.querySelector('.auth-success')?.textContent).toContain('mot de passe a été modifié');
+    expect(fixture.componentInstance['profilePassword']()).toBe('');
   });
 
   it('shows only saved offers in the favorites view', () => {
@@ -441,14 +486,24 @@ describe('App', () => {
   });
 
   it('opens partner hotel searches with destination, dates, and traveler count', () => {
+    const departureDate = new Date();
+    departureDate.setDate(departureDate.getDate() + 30);
+    const returnDateValue = new Date(departureDate);
+    returnDateValue.setDate(returnDateValue.getDate() + 7);
+    const formatDate = (date: Date) => {
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+      return localDate.toISOString().slice(0, 10);
+    };
+    const departureValue = formatDate(departureDate);
+    const returnValue = formatDate(returnDateValue);
     const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
     destination.value = 'Lisbonne, Portugal';
     destination.dispatchEvent(new Event('input'));
     const departure = fixture.nativeElement.querySelector('input[name="departure"]') as HTMLInputElement;
-    departure.value = '2026-10-15';
+    departure.value = departureValue;
     departure.dispatchEvent(new Event('input'));
     const returnDate = fixture.nativeElement.querySelector('input[name="return"]') as HTMLInputElement;
-    returnDate.value = '2026-10-22';
+    returnDate.value = returnValue;
     returnDate.dispatchEvent(new Event('input'));
     const travelers = fixture.nativeElement.querySelector('select[name="travelers"]') as HTMLSelectElement;
     travelers.selectedIndex = 2;
@@ -463,8 +518,8 @@ describe('App', () => {
     expect(partnerLinks).toHaveLength(2);
     const bookingUrl = new URL(partnerLinks.find((link) => link.textContent?.includes('Booking.com'))!.href);
     expect(bookingUrl.searchParams.get('ss')).toBe('Lisbonne, Portugal');
-    expect(bookingUrl.searchParams.get('checkin')).toBe('2026-10-15');
-    expect(bookingUrl.searchParams.get('checkout')).toBe('2026-10-22');
+    expect(bookingUrl.searchParams.get('checkin')).toBe(departureValue);
+    expect(bookingUrl.searchParams.get('checkout')).toBe(returnValue);
     expect(bookingUrl.searchParams.get('group_adults')).toBe('3');
     const googleHotelsUrl = new URL(partnerLinks.find((link) => link.textContent?.includes('Google Hotels'))!.href);
     expect(googleHotelsUrl.searchParams.get('q')).toContain('Lisbonne, Portugal');

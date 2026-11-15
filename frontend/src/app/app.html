@@ -33,6 +33,31 @@
             <span>{{ account.email }}</span>
             <span>{{ savedCount() }} favori{{ savedCount() === 1 ? '' : 's' }} enregistré{{ savedCount() === 1 ? '' : 's' }} sur votre compte</span>
           </div>
+          <form class="auth-form profile-form" (ngSubmit)="updateAccountProfile()">
+            <label>
+              <span>Nom affiché</span>
+              <input type="text" name="profileDisplayName" autocomplete="name" [ngModel]="profileDisplayName()" (ngModelChange)="profileDisplayName.set($event)" minlength="2" maxlength="120" required>
+            </label>
+            <button class="auth-submit" type="submit" [disabled]="profileLoading()">Mettre à jour mon profil</button>
+          </form>
+          <form class="auth-form profile-form" (ngSubmit)="changeAccountPassword()">
+            <label>
+              <span>Mot de passe actuel</span>
+              <input type="password" name="currentPassword" autocomplete="current-password" [ngModel]="profilePassword()" (ngModelChange)="profilePassword.set($event)" maxlength="72" required>
+            </label>
+            <label>
+              <span>Nouveau mot de passe</span>
+              <input type="password" name="newPassword" autocomplete="new-password" [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)" minlength="12" maxlength="72" required>
+              <small class="password-hint">12 caractères minimum.</small>
+            </label>
+            <button class="auth-submit" type="submit" [disabled]="profileLoading()">Modifier mon mot de passe</button>
+          </form>
+          @if (profileError()) {
+            <p class="auth-error" role="alert">{{ profileError() }}</p>
+          }
+          @if (profileSuccess()) {
+            <p class="auth-success" role="status">{{ profileSuccess() }}</p>
+          }
           <div class="profile-actions">
             <button type="button" class="auth-submit" (click)="toggleFavoritesView(); closeAuth()">Voir mes favoris</button>
             <button type="button" class="auth-logout" (click)="logout(); closeAuth()">Se déconnecter</button>

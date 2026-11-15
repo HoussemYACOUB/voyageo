@@ -265,6 +265,12 @@ export class App implements OnInit {
   protected readonly authDisplayName = signal('');
   protected readonly authLoading = signal(false);
   protected readonly authError = signal('');
+  protected readonly profileDisplayName = signal('');
+  protected readonly profilePassword = signal('');
+  protected readonly newPassword = signal('');
+  protected readonly profileLoading = signal(false);
+  protected readonly profileError = signal('');
+  protected readonly profileSuccess = signal('');
   protected readonly user = this.authService.currentUser;
   protected readonly isAuthenticated = this.authService.isAuthenticated;
   protected readonly userInitial = computed(() => this.user()?.displayName?.charAt(0).toUpperCase() ?? '👤');
@@ -627,6 +633,11 @@ export class App implements OnInit {
   }
 
   protected openProfile(): void {
+    this.profileDisplayName.set(this.user()?.displayName ?? '');
+    this.profilePassword.set('');
+    this.newPassword.set('');
+    this.profileError.set('');
+    this.profileSuccess.set('');
     this.authOpen.set(true);
     this.authError.set('');
   }
@@ -722,6 +733,55 @@ export class App implements OnInit {
         this.authLoading.set(false);
         const message = error.error?.message;
         this.authError.set(typeof message === 'string' ? message : 'Connexion impossible. Vérifiez vos identifiants ou réessayez.');
+      }
+    });
+  }
+
+  protected updateAccountProfile(): void {
+    const displayName = this.profileDisplayName().trim();
+    if (displayName.length < 2 || displayName.length > 120) {
+      this.profileError.set('Le nom affiché doit contenir entre 2 et 120 caractères.');
+      return;
+    }
+
+    this.profileLoading.set(true);
+    this.profileError.set('');
+    this.profileSuccess.set('');
+    this.authService.updateProfile(displayName).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.profileLoading.set(false);
+        this.profileSuccess.set('Votre profil a été mis à jour.');
+      },
+      error: (error: HttpErrorResponse) => {
+        this.profileLoading.set(false);
+        const message = error.error?.message;
+        this.profileError.set(typeof message === 'string' ? message : 'Impossible de mettre à jour votre profil.');
+      }
+    });
+  }
+
+  protected changeAccountPassword(): void {
+    const currentPassword = this.profilePassword();
+    const newPassword = this.newPassword();
+    if (!currentPassword || newPassword.length < 12 || newPassword.length > 72) {
+      this.profileError.set('Saisissez votre mot de passe actuel et un nouveau mot de passe de 12 à 72 caractères.');
+      return;
+    }
+
+    this.profileLoading.set(true);
+    this.profileError.set('');
+    this.profileSuccess.set('');
+    this.authService.changePassword({ currentPassword, newPassword }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.profileLoading.set(false);
+        this.profilePassword.set('');
+        this.newPassword.set('');
+        this.profileSuccess.set('Votre mot de passe a été modifié.');
+      },
+      error: (error: HttpErrorResponse) => {
+        this.profileLoading.set(false);
+        const message = error.error?.message;
+        this.profileError.set(typeof message === 'string' ? message : 'Impossible de modifier votre mot de passe.');
       }
     });
   }

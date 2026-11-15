@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.riskboard.backend.auth.dto.AuthResponse;
+import com.riskboard.backend.auth.dto.ChangePasswordRequest;
 import com.riskboard.backend.auth.dto.LoginRequest;
 import com.riskboard.backend.auth.dto.RegisterRequest;
+import com.riskboard.backend.auth.dto.UpdateProfileRequest;
 import com.riskboard.backend.auth.dto.UserProfileResponse;
 import com.riskboard.backend.auth.model.UserAccount;
 import com.riskboard.backend.auth.repository.UserAccountRepository;
@@ -61,6 +63,24 @@ public class AuthService {
 
     public UserProfileResponse me(UserAccount user) {
         return mapProfile(user);
+    }
+
+    @Transactional
+    public UserProfileResponse updateProfile(UserAccount user, UpdateProfileRequest request) {
+        user.setDisplayName(request.displayName().trim());
+        return mapProfile(userRepository.save(user));
+    }
+
+    @Transactional
+    public void changePassword(UserAccount user, ChangePasswordRequest request) {
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Le mot de passe actuel est incorrect.");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Choisissez un nouveau mot de passe différent de l’actuel.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
     }
 
     public UserAccount loadByEmail(String email) {

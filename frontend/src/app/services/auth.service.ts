@@ -24,6 +24,11 @@ export interface RegisterPayload extends LoginPayload {
   displayName: string;
 }
 
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
 // En natif (Android/iOS) on cible le backend local ; sur le web deploye on utilise un chemin relatif proxifie par Netlify
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -62,6 +67,16 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.endpoint}/login`, payload).pipe(
       tap((response) => this.applyAuth(response))
     );
+  }
+
+  updateProfile(displayName: string): Observable<AuthUser> {
+    return this.http.put<AuthUser>(`${this.endpoint}/profile`, { displayName }).pipe(
+      tap((user) => this.currentUserSignal.set(user))
+    );
+  }
+
+  changePassword(payload: ChangePasswordPayload): Observable<void> {
+    return this.http.put<void>(`${this.endpoint}/password`, payload);
   }
 
   logout(): void {

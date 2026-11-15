@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -95,6 +96,67 @@ class AuthControllerIntegrationTest {
     void doesNotExposeAuthenticationEndpointsForGetRequests() throws Exception {
         mockMvc.perform(get("/api/auth/register"))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void updatesProfileAndChangesPasswordOnlyAfterVerifyingCurrentPassword() throws Exception {
+        String email = "profile-" + UUID.randomUUID() + "@example.com";
+        MvcResult registration = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"displayName\":\"Voyageur\",\"password\":\"secure-password-2026\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = readToken(registration);
+        String authorization = "Bearer " + token;
+
+        mockMvc.perform(put("/api/auth/profile")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"  Alex Voyageur  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Alex Voyageur"))
+                .andExpect(jsonPath("$.email").value(email));
+
+        mockMvc.perform(put("/api/auth/password")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"incorrect-password\",\"newPassword\":\"new-secure-password-2026\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/auth/password")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"secure-password-2026\",\"newPassword\":\"secure-password-2026\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/auth/password")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"secure-password-2026\",\"newPassword\":\"new-secure-password-2026\"}"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"secure-password-2026\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"new-secure-password-2026\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void requiresAuthenticationForProfileAndPasswordUpdates() throws Exception {
+        mockMvc.perform(put("/api/auth/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"New Name\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/auth/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"old-password\",\"newPassword\":\"new-secure-password-2026\"}"))
+                .andExpect(status().isUnauthorized());
     }
 
     private String readToken(MvcResult result) throws Exception {
