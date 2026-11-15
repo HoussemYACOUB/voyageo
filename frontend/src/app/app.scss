@@ -1,7 +1,7 @@
 :host { display: block; }
 
 .app-shell { max-width: 1440px; margin: 0 auto; padding: 0 7.2%; position: relative; }
-.site-header { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e9ecf2; }
+.site-header { position: sticky; top: 0; z-index: 15; height: 78px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e9ecf2; background: #f7f8fce8; backdrop-filter: blur(14px); }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: #172536; text-decoration: none; font: 800 24px/1 'Manrope', sans-serif; letter-spacing: -1.2px; }
 .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px 12px 12px 4px; background: linear-gradient(145deg, #1675e8, #0754bd); color: white; font-size: 19px; box-shadow: 0 8px 18px #1262bf35; }
 .brand-dot { color: #0875e1; }
@@ -27,7 +27,7 @@
 .hero-shortcuts button:hover, .hero-shortcuts button.selected { border-color: #fff; background: #0875e1; transform: translateY(-1px); }
 .hero-shortcuts button span { font-size: 15px; }
 
-.search-panel { position: relative; z-index: 3; margin: -38px 3.5% 0; padding: 17px 17px 12px; border: 1px solid #e2e8f0; border-radius: 15px; background: white; box-shadow: 0 16px 42px #14375a1b; }
+.search-panel { position: relative; z-index: 3; margin: -38px 3.5% 0; padding: 20px; border: 1px solid #e2e8f0; border-radius: 20px; background: white; box-shadow: 0 22px 54px #14375a24; }
 .search-form { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 58px; }
 .trip-type-control { display: inline-flex; flex: 0 0 100%; gap: 4px; margin: 0 7px 4px; }
 .search-field-wrap { position: relative; flex: 1; min-width: 0; }
@@ -87,7 +87,7 @@
 .demo-notice p { margin: 0; color: #766744; font-size: 11px; line-height: 1.5; }
 .demo-notice strong { color: #6d551f; }
 .offer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 19px; }
-.offer-card { min-width: 0; overflow: hidden; border: 1px solid #e1e7ef; border-radius: 14px; background: white; box-shadow: 0 4px 15px #1a32400a; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.offer-card { min-width: 0; overflow: hidden; border: 1px solid #e1e7ef; border-radius: 18px; background: white; box-shadow: 0 8px 24px #1a324012; transition: transform .2s, box-shadow .2s, border-color .2s; }
 .offer-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px #1a324018; border-color: #b8d2f0; }
 .offer-art { display: flex; align-items: center; justify-content: center; position: relative; height: 175px; overflow: hidden; background: linear-gradient(130deg, #d6e8fa, #8db6e0); }
 .offer-art[data-category='FLIGHT'] { background: linear-gradient(130deg, #bed5ef, #7aa5cf); }
@@ -135,6 +135,11 @@
 .banner-price { margin-left: auto; color: #168c7e !important; font: 800 17px/1.1 'Manrope', sans-serif; text-align: right; white-space: nowrap; }
 .banner-price small { display: block; margin-top: 4px; color: #81928d; font: 500 9px 'DM Sans', sans-serif; }
 .site-footer { display: flex; justify-content: space-between; gap: 15px; padding: 18px 0 23px; border-top: 1px solid #e9ecf2; color: #98a1aa; font-size: 10px; }
+
+.comparison-toggle { margin-top: 7px; }
+.comparison-tray { position: fixed; z-index: 80; inset: auto 12px 12px; max-width: 720px; margin: 0 auto; box-shadow: 0 18px 48px #0b1c2e35; }
+.comparison-tray-actions { display: flex; gap: 8px; margin-left: auto; }
+.auth-panel.comparison-dialog { width: min(1020px, 100%); }
 
 @media (min-width: 1200px) { .offer-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 900px) {

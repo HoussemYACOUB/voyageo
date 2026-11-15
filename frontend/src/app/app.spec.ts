@@ -145,6 +145,73 @@ describe('App', () => {
     expect(fixture.nativeElement.querySelector('.search-note[role="status"]')?.textContent).toContain('seules les offres en USD');
   });
 
+  it('shares and restores a link with the current travel criteria', async () => {
+    const app = fixture.componentInstance;
+    app['origin'].set('Paris, France');
+    app['originIata'].set('PAR');
+    app['destination'].set('Rome, Italie');
+    app['destinationIata'].set('ROM');
+    app['departureDate'].set('2099-10-15');
+    app['returnDate'].set('2099-10-20');
+    app['travelers'].set(3);
+    app['activeCategory'].set('FLIGHT');
+
+    const share = vi.fn().mockResolvedValue(undefined);
+    const originalShare = Object.getOwnPropertyDescriptor(navigator, 'share');
+    const originalUrl = window.location.href;
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+    try {
+      await app['shareSearch']();
+      expect(share).toHaveBeenCalledOnce();
+      const sharedUrl = new URL(share.mock.calls[0]![0].url);
+      expect(sharedUrl.searchParams.get('originIata')).toBe('PAR');
+      expect(sharedUrl.searchParams.get('destinationIata')).toBe('ROM');
+      expect(sharedUrl.searchParams.get('departure')).toBe('2099-10-15');
+      expect(sharedUrl.searchParams.get('travelers')).toBe('3');
+
+      window.history.replaceState({}, '', sharedUrl.toString());
+      app['destination'].set('');
+      app['restoreSharedSearch']();
+      expect(app['destination']()).toBe('Rome, Italie');
+      expect(app['origin']()).toBe('Paris, France');
+      expect(app['travelers']()).toBe(3);
+      expect(app['activeCategory']()).toBe('FLIGHT');
+      expect(app['shareStatus']()).toBe('Recherche partagée.');
+    } finally {
+      window.history.replaceState({}, '', originalUrl);
+      if (originalShare) Object.defineProperty(navigator, 'share', originalShare);
+      else Reflect.deleteProperty(navigator, 'share');
+    }
+  });
+
+  it('compares up to three offers and keeps prices in their original currencies', () => {
+    const extraOffers: TravelOffer[] = [
+      { id: 'hotel-lisbon', category: 'HOTEL', title: 'Séjour à Lisbonne', destination: 'Lisbonne', provider: 'Test', price: 180, currency: 'EUR', details: 'Deux nuits', rating: 4.3, demo: false },
+      { id: 'flight-nyc', category: 'FLIGHT', title: 'Vol vers New York', destination: 'New York', provider: 'Test', price: 240, currency: 'USD', details: 'Vol avec escale', rating: 4.1, demo: false }
+    ];
+    service.search.mockReturnValue(of([...demoOffers, ...extraOffers]));
+    fixture.componentInstance['searchOffers']();
+    fixture.detectChanges();
+
+    const compareButtons = Array.from(fixture.nativeElement.querySelectorAll('.offer-card:not(.inspiration-card) .comparison-toggle') as NodeListOf<HTMLButtonElement>);
+    compareButtons.slice(0, 3).forEach((button) => button.click());
+    fixture.detectChanges();
+
+    const compareButton = fixture.nativeElement.querySelector('.comparison-tray .search-button') as HTMLButtonElement;
+    expect(compareButton.disabled).toBe(false);
+    expect(fixture.nativeElement.querySelector('.comparison-tray')?.textContent).toContain('3 offres sélectionnées');
+    expect(compareButtons[3].disabled).toBe(true);
+
+    compareButton.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.comparison-card')).toHaveLength(3);
+    expect(fixture.nativeElement.querySelector('.comparison-dialog .search-note')?.textContent).toContain('Aucune conversion');
+
+    (fixture.nativeElement.querySelector('.comparison-card .auth-close') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.comparison-card')).toHaveLength(2);
+  });
+
   it('adds an offer to favorites and updates the counter', () => {
     const favoriteButton = fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement;
     favoriteButton.click();

@@ -52,6 +52,7 @@ registerLocaleData(localeFr, 'fr-FR');
 const FAVORITES_STORAGE_KEY = 'voyageo.favorites';
 const RECENT_SEARCHES_STORAGE_KEY = 'voyageo.recent-searches';
 const MAX_RECENT_SEARCHES = 6;
+const MAX_COMPARISON_OFFERS = 3;
 const FALLBACK_CITIES: CitySuggestion[] = [
   { text: 'Paris, France', placeId: 'PAR', iataCode: 'PAR', type: 'city', provider: 'fallback' },
   { text: 'Lyon, France', placeId: 'LYS', iataCode: 'LYS', type: 'city', provider: 'fallback' },
@@ -98,6 +99,12 @@ function isRecentSearch(value: unknown): value is RecentSearch {
     && isCategoryFilter(category);
 }
 
+function isValidDateInput(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, PriceComparisonChart, FavoriteToggle, MonthlyDateCalendar, PriceAlertPanel],
@@ -129,6 +136,9 @@ export class App implements OnInit {
   protected readonly budgetCeiling = signal<number | null>(null);
   protected readonly budgetCurrency = signal('EUR');
   protected readonly offers = signal<TravelOffer[]>([]);
+  protected readonly comparisonSelection = signal<TravelOffer[]>([]);
+  protected readonly comparisonOpen = signal(false);
+  protected readonly shareStatus = signal('');
   protected readonly recentSearches = signal<RecentSearch[]>([]);
   protected readonly accountFavoriteOffers = signal<TravelOffer[]>([]);
   protected readonly favorites = signal<Set<string>>(new Set());
@@ -346,6 +356,7 @@ export class App implements OnInit {
   ngOnInit(): void {
     this.restoreFavorites();
     this.restoreRecentSearches();
+    this.restoreSharedSearch();
     this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (user) => {
         if (user) this.loadAccountFavorites();
@@ -379,6 +390,34 @@ export class App implements OnInit {
         this.destinationAutocompleteComplete.set(this.destination().trim().length >= 2);
       });
     this.searchOffers();
+  }
+
+  private restoreSharedSearch(): void {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (!['destination', 'origin', 'departure', 'return', 'category', 'tripType', 'travelers']
+      .some((key) => params.has(key))) return;
+
+    this.destination.set((params.get('destination') ?? '').trim().slice(0, 120));
+    this.origin.set((params.get('origin') ?? '').trim().slice(0, 120));
+    const originIata = params.get('originIata') ?? '';
+    const destinationIata = params.get('destinationIata') ?? '';
+    this.originIata.set(/^[A-Z0-9]{3}$/i.test(originIata) ? originIata.toUpperCase() : '');
+    this.destinationIata.set(/^[A-Z0-9]{3}$/i.test(destinationIata) ? destinationIata.toUpperCase() : '');
+
+    const departureDate = params.get('departure') ?? '';
+    const returnDate = params.get('return') ?? '';
+    this.departureDate.set(isValidDateInput(departureDate) ? departureDate : '');
+    this.returnDate.set(isValidDateInput(returnDate) ? returnDate : '');
+
+    const travelers = Number(params.get('travelers'));
+    if (Number.isInteger(travelers) && travelers >= 1 && travelers <= 9) this.travelers.set(travelers);
+    const tripType = params.get('tripType');
+    if (tripType === 'ROUND_TRIP' || tripType === 'ONE_WAY') this.tripType.set(tripType);
+    const category = params.get('category');
+    if (isCategoryFilter(category)) this.activeCategory.set(category);
+    if (this.activeCategory() === 'HOTEL') this.tripType.set('ROUND_TRIP');
+    if (this.tripType() === 'ONE_WAY') this.returnDate.set('');
   }
 
   private autocompleteCities(query: string) {
@@ -654,6 +693,48 @@ export class App implements OnInit {
     this.inspirationCategory.set(category);
   }
 
+  protected createSearchShareUrl(): string {
+    const url = new URL(window.location.href);
+    const params = new URLSearchParams();
+    const values: Record<string, string> = {
+      destination: this.destination().trim(),
+      origin: this.origin().trim(),
+      originIata: this.originIata(),
+      destinationIata: this.destinationIata(),
+      departure: this.departureDate(),
+      return: this.tripType() === 'ROUND_TRIP' ? this.returnDate() : '',
+      travelers: String(this.travelers()),
+      tripType: this.tripType(),
+      category: this.activeCategory()
+    };
+    for (const [key, value] of Object.entries(values)) {
+      if (value) params.set(key, value);
+    }
+    url.search = params.toString();
+    url.hash = 'recherche';
+    return url.toString();
+  }
+
+  protected async shareSearch(): Promise<void> {
+    this.shareStatus.set('');
+    try {
+      const url = this.createSearchShareUrl();
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: 'Ma recherche Voyageo', url });
+        this.shareStatus.set('Recherche partagée.');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        this.shareStatus.set('Lien de recherche copié.');
+      } else {
+        throw new Error('Aucune option de partage ou de copie n’est disponible dans ce navigateur.');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      console.error('Impossible de partager la recherche Voyageo.', error);
+      this.shareStatus.set('Partage impossible. Vérifiez les permissions du navigateur.');
+    }
+  }
+
   protected exploreInspiration(inspiration: TravelInspiration): void {
     this.activeCategory.set(inspiration.category);
     this.inspirationCategory.set(inspiration.category);
@@ -722,6 +803,39 @@ export class App implements OnInit {
 
   protected isFavorite(id: string): boolean {
     return this.favorites().has(id);
+  }
+
+  protected isComparisonSelected(id: string): boolean {
+    return this.comparisonSelection().some((offer) => offer.id === id);
+  }
+
+  protected toggleComparison(offer: TravelOffer): void {
+    const selected = this.comparisonSelection();
+    if (selected.some((item) => item.id === offer.id)) {
+      this.removeComparedOffer(offer.id);
+      return;
+    }
+    if (selected.length >= MAX_COMPARISON_OFFERS) return;
+    this.comparisonSelection.set([...selected, offer]);
+  }
+
+  protected openComparison(): void {
+    if (this.comparisonSelection().length >= 2) this.comparisonOpen.set(true);
+  }
+
+  protected closeComparison(): void {
+    this.comparisonOpen.set(false);
+  }
+
+  protected removeComparedOffer(id: string): void {
+    const remaining = this.comparisonSelection().filter((offer) => offer.id !== id);
+    this.comparisonSelection.set(remaining);
+    if (remaining.length < 2) this.comparisonOpen.set(false);
+  }
+
+  protected clearComparison(): void {
+    this.comparisonSelection.set([]);
+    this.comparisonOpen.set(false);
   }
 
   protected selectCalendarDate(date: string): void {

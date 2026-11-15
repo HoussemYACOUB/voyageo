@@ -239,6 +239,14 @@
           </a>
         }
       </div>
+      <div class="partner-strip search-actions" role="group" aria-label="Partager la recherche">
+        <button class="partner-chip share-button" type="button" (click)="shareSearch()">
+          <span class="partner-badge" aria-hidden="true">↗</span>Partager cette recherche
+        </button>
+        @if (shareStatus()) {
+          <span class="search-note" role="status">{{ shareStatus() }}</span>
+        }
+      </div>
       <p class="search-note">Les recherches d’hôtels et de vols dépendent des quotas et conditions des fournisseurs. Les liens ouvrent leur site : Voyageo ne réalise ni réservation ni paiement.</p>
       @if (activeCategory() === 'FLIGHT' && originIata() && destinationIata()) {
         <app-monthly-date-calendar [originIata]="originIata()" [destinationIata]="destinationIata()"
@@ -395,6 +403,13 @@
                 } @else {
                   <button class="offer-action" type="button" disabled>Réservation bientôt disponible <span>↗</span></button>
                 }
+                <button class="offer-action offer-action-link category-chip comparison-toggle" type="button"
+                  [attr.aria-pressed]="isComparisonSelected(offer.id)"
+                  [class.selected]="isComparisonSelected(offer.id)"
+                  [disabled]="comparisonSelection().length >= 3 && !isComparisonSelected(offer.id)"
+                  (click)="toggleComparison(offer)">
+                  {{ isComparisonSelected(offer.id) ? '✓ Retirer de la comparaison' : comparisonSelection().length >= 3 ? 'Maximum atteint' : '+ Ajouter à comparer' }}
+                </button>
               </div>
             </article>
           }
@@ -409,6 +424,65 @@
       }
     </section>
   </main>
+
+  @if (comparisonSelection().length > 0) {
+    <aside class="bottom-banner comparison-tray" role="region" aria-label="Comparateur d’offres">
+      <div class="banner-icon" aria-hidden="true">⇄</div>
+      <div class="comparison-tray-copy">
+        <strong>{{ comparisonSelection().length }} offre{{ comparisonSelection().length > 1 ? 's' : '' }} sélectionnée{{ comparisonSelection().length > 1 ? 's' : '' }} / 3</strong>
+        <span>Comparez prix, note et plateforme.</span>
+      </div>
+      <div class="comparison-tray-actions">
+        <button class="auth-secondary" type="button" (click)="clearComparison()">Effacer</button>
+        <button class="search-button" type="button" [disabled]="comparisonSelection().length < 2" (click)="openComparison()">Comparer</button>
+      </div>
+    </aside>
+  }
+
+  @if (comparisonOpen()) {
+    <div class="auth-overlay comparison-overlay" role="presentation" (click)="closeComparison()">
+      <section class="auth-panel comparison-dialog" role="dialog" aria-modal="true" aria-labelledby="comparison-title"
+        (click)="$event.stopPropagation()">
+        <div class="auth-header">
+          <h3 id="comparison-title">Comparez vos options</h3>
+          <button type="button" class="auth-close" aria-label="Fermer la comparaison" (click)="closeComparison()">✕</button>
+        </div>
+        <p class="auth-description">Retrouvez les informations utiles avant de choisir. Les tarifs restent indicatifs.</p>
+        <div class="offer-grid comparison-grid">
+          @for (offer of comparisonSelection(); track offer.id) {
+            <article class="offer-card comparison-card">
+              <div class="offer-art" [attr.data-category]="offer.category">
+                <img class="art-photo" [src]="offerImageUrl(offer)" [alt]="offer.destination + ' - ' + categoryLabel(offer.category)" loading="lazy" decoding="async" (error)="onOfferImageError($event)">
+                <span class="art-label">{{ categoryLabel(offer.category) }}</span>
+              </div>
+              <div class="offer-content">
+                <div class="offer-title-row">
+                  <div><span class="offer-destination">{{ offer.destination }}</span><h3>{{ offer.title }}</h3></div>
+                  <button type="button" class="auth-close" [attr.aria-label]="'Retirer ' + offer.title" (click)="removeComparedOffer(offer.id)">✕</button>
+                </div>
+                <p class="offer-details">{{ offer.details }}</p>
+                <div class="offer-footer">
+                  <span class="provider"><span class="provider-badge" [style.background]="providerColor(offer)">{{ providerBadge(offer) }}</span>{{ providerDisplayName(offer) }}</span>
+                  <div class="price">
+                    <strong>{{ offer.price | currency:offer.currency:'symbol':(offer.category === 'HOTEL' ? '1.2-2' : '1.0-0'):'fr-FR' }}</strong>
+                    <span>{{ offer.demo ? 'tarif de démonstration' : 'prix indicatif à vérifier' }}</span>
+                  </div>
+                </div>
+                @if (offer.rating > 0) {
+                  <p class="offer-details">Note affichée : ★ {{ offer.rating | number:'1.1-1' }}</p>
+                }
+                @if (offerPartnerSearchUrl(offer); as url) {
+                  <a class="offer-action offer-action-link" [href]="url" target="_blank" rel="noopener noreferrer">Voir chez {{ providerDisplayName(offer) }} <span>↗</span></a>
+                }
+              </div>
+            </article>
+          }
+        </div>
+        <p class="search-note" role="note">Les prix sont affichés dans leur devise d’origine. Aucune conversion n’est effectuée et la disponibilité doit être vérifiée chez le partenaire.</p>
+        <button class="auth-secondary" type="button" (click)="clearComparison()">Effacer les sélections</button>
+      </section>
+    </div>
+  }
 
   <footer class="site-footer"><span>© 2026 Voyageo · Fait pour les envies d’ailleurs.</span><span>Prix Aviasales indicatifs issus du cache; offres démo non réservables.</span></footer>
 </div>
