@@ -217,6 +217,19 @@
           <button type="button" class="suggestion-chip" (click)="quickSearch(suggestion)">{{ suggestion }}</button>
         }
       </div>
+      @if (recentSearches().length > 0) {
+        <div class="quick-suggestions recent-searches" role="group" aria-label="Recherches récentes">
+          <span>Recherches récentes</span>
+          @for (search of recentSearches(); track recentSearchKey(search)) {
+            <button class="suggestion-chip recent-search-chip" type="button" (click)="repeatRecentSearch(search)"
+              [attr.aria-label]="'Relancer la recherche : ' + recentSearchLabel(search)">
+              <strong>{{ recentSearchLabel(search) }}</strong>
+              <span>{{ recentSearchDetails(search) }}</span>
+            </button>
+          }
+          <button class="suggestion-chip clear-recent-searches" type="button" (click)="clearRecentSearches()">Effacer</button>
+        </div>
+      }
       <div class="partner-strip" role="group" aria-label="Plateformes partenaires">
         <span>Comparer aussi sur :</span>
         @for (partner of visiblePartners(); track partner.id) {

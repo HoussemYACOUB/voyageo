@@ -35,9 +35,23 @@ interface TravelInspiration {
   imageAlt: string;
 }
 
+interface RecentSearch {
+  destination: string;
+  origin: string;
+  originIata: string;
+  destinationIata: string;
+  departureDate: string;
+  returnDate: string;
+  travelers: number;
+  tripType: TripType;
+  category: CategoryFilter;
+}
+
 registerLocaleData(localeFr, 'fr-FR');
 
 const FAVORITES_STORAGE_KEY = 'voyageo.favorites';
+const RECENT_SEARCHES_STORAGE_KEY = 'voyageo.recent-searches';
+const MAX_RECENT_SEARCHES = 6;
 const FALLBACK_CITIES: CitySuggestion[] = [
   { text: 'Paris, France', placeId: 'PAR', iataCode: 'PAR', type: 'city', provider: 'fallback' },
   { text: 'Lyon, France', placeId: 'LYS', iataCode: 'LYS', type: 'city', provider: 'fallback' },
@@ -51,6 +65,37 @@ const FALLBACK_CITIES: CitySuggestion[] = [
 
 function normalizeCityQuery(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
+}
+
+function isCategoryFilter(value: unknown): value is CategoryFilter {
+  return value === 'ALL' || value === 'HOTEL' || value === 'FLIGHT'
+    || value === 'TRAIN' || value === 'CAR' || value === 'CARPOOL';
+}
+
+function isRecentSearch(value: unknown): value is RecentSearch {
+  if (typeof value !== 'object' || value === null) return false;
+  const search = value as Record<string, unknown>;
+  const destination = search['destination'];
+  const origin = search['origin'];
+  const originIata = search['originIata'];
+  const destinationIata = search['destinationIata'];
+  const departureDate = search['departureDate'];
+  const returnDate = search['returnDate'];
+  const travelers = search['travelers'];
+  const tripType = search['tripType'];
+  const category = search['category'];
+  return typeof destination === 'string'
+    && typeof origin === 'string'
+    && typeof originIata === 'string'
+    && typeof destinationIata === 'string'
+    && typeof departureDate === 'string'
+    && typeof returnDate === 'string'
+    && typeof travelers === 'number'
+    && Number.isInteger(travelers)
+    && travelers >= 1
+    && travelers <= 9
+    && (tripType === 'ROUND_TRIP' || tripType === 'ONE_WAY')
+    && isCategoryFilter(category);
 }
 
 @Component({
@@ -82,6 +127,7 @@ export class App implements OnInit {
   protected readonly activeCategory = signal<CategoryFilter>('ALL');
   protected readonly sortBy = signal<OfferSort>('price');
   protected readonly offers = signal<TravelOffer[]>([]);
+  protected readonly recentSearches = signal<RecentSearch[]>([]);
   protected readonly accountFavoriteOffers = signal<TravelOffer[]>([]);
   protected readonly favorites = signal<Set<string>>(new Set());
   protected readonly favoritesOnly = signal(false);
@@ -278,6 +324,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     this.restoreFavorites();
+    this.restoreRecentSearches();
     this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (user) => {
         if (user) this.loadAccountFavorites();
@@ -377,6 +424,90 @@ export class App implements OnInit {
     }
   }
 
+  private restoreRecentSearches(): void {
+    try {
+      const stored = localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        console.warn('Les recherches récentes de Voyageo sont illisibles et ont été ignorées.');
+        return;
+      }
+      const validSearches = parsed.filter(isRecentSearch).slice(0, MAX_RECENT_SEARCHES);
+      if (validSearches.length !== parsed.length) {
+        console.warn('Certaines recherches récentes de Voyageo sont illisibles et ont été ignorées.');
+      }
+      this.recentSearches.set(validSearches);
+    } catch (error) {
+      console.warn('Impossible de restaurer les recherches récentes de Voyageo.', error);
+    }
+  }
+
+  private recordRecentSearch(): void {
+    const search: RecentSearch = {
+      destination: this.destination().trim(),
+      origin: this.origin().trim(),
+      originIata: this.originIata(),
+      destinationIata: this.destinationIata(),
+      departureDate: this.departureDate(),
+      returnDate: this.returnDate(),
+      travelers: this.travelers(),
+      tripType: this.tripType(),
+      category: this.activeCategory()
+    };
+    if (!search.destination && !search.origin && !search.departureDate && !search.returnDate) return;
+
+    const key = JSON.stringify(search);
+    const updatedSearches = [
+      search,
+      ...this.recentSearches().filter((recentSearch) => JSON.stringify(recentSearch) !== key)
+    ].slice(0, MAX_RECENT_SEARCHES);
+    this.recentSearches.set(updatedSearches);
+    try {
+      localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(updatedSearches));
+    } catch (error) {
+      console.warn('Impossible d’enregistrer les recherches récentes de Voyageo.', error);
+    }
+  }
+
+  protected repeatRecentSearch(search: RecentSearch): void {
+    this.destination.set(search.destination);
+    this.origin.set(search.origin);
+    this.originIata.set(search.originIata);
+    this.destinationIata.set(search.destinationIata);
+    this.departureDate.set(search.departureDate);
+    this.returnDate.set(search.returnDate);
+    this.travelers.set(search.travelers);
+    this.tripType.set(search.tripType);
+    this.activeCategory.set(search.category);
+    this.favoritesOnly.set(false);
+    this.originAutocompleteSuggestions.set([]);
+    this.destinationAutocompleteSuggestions.set([]);
+    this.originAutocompleteComplete.set(false);
+    this.destinationAutocompleteComplete.set(false);
+    this.searchOffers();
+  }
+
+  protected clearRecentSearches(): void {
+    this.recentSearches.set([]);
+    try {
+      localStorage.removeItem(RECENT_SEARCHES_STORAGE_KEY);
+    } catch (error) {
+      console.warn('Impossible d’effacer les recherches récentes de Voyageo.', error);
+    }
+  }
+
+  protected recentSearchLabel(search: RecentSearch): string {
+    const destination = search.destination || 'N’importe où';
+    return search.origin ? `${search.origin} → ${destination}` : destination;
+  }
+
+  protected recentSearchDetails(search: RecentSearch): string {
+    const dates = [search.departureDate, search.returnDate].filter(Boolean).join(' → ');
+    const details = [this.categoryLabel(search.category), dates, `${search.travelers} voyageur${search.travelers > 1 ? 's' : ''}`];
+    return details.filter(Boolean).join(' · ');
+  }
+
   protected selectOriginSuggestion(suggestion: CitySuggestion): void {
     this.origin.set(suggestion.text);
     this.originIata.set(suggestion.iataCode ?? '');
@@ -424,6 +555,7 @@ export class App implements OnInit {
       return;
     }
 
+    this.recordRecentSearch();
     this.loading.set(true);
     this.errorMessage.set('');
     const category = this.activeCategory();
@@ -564,8 +696,12 @@ export class App implements OnInit {
     this.searchOffers();
   }
 
-  protected categoryLabel(category: OfferCategory): string {
+  protected categoryLabel(category: CategoryFilter): string {
     return this.categories.find((item) => item.id === category)?.label ?? category;
+  }
+
+  protected recentSearchKey(search: RecentSearch): string {
+    return JSON.stringify(search);
   }
 
   private static readonly destinationPhotoIds: Record<string, string> = {

@@ -253,6 +253,46 @@ describe('App', () => {
     expect(service.search).toHaveBeenLastCalledWith('Tokyo', undefined, 'price');
   });
 
+  it('persists and replays recent searches with their selected category', () => {
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Tokyo';
+    destination.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const flights = Array.from(fixture.nativeElement.querySelectorAll('.hero-shortcuts button') as NodeListOf<HTMLButtonElement>)
+      .find((button) => button.textContent?.includes('Vols'));
+    flights?.click();
+    fixture.detectChanges();
+
+    const savedSearches = JSON.parse(localStorage.getItem('voyageo.recent-searches') ?? '[]') as Array<{ destination: string; category: string }>;
+    expect(savedSearches[0]).toMatchObject({ destination: 'Tokyo', category: 'FLIGHT' });
+    expect(fixture.nativeElement.querySelector('.recent-searches')?.textContent).toContain('Tokyo');
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.recent-search-chip') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(service.search).toHaveBeenLastCalledWith('Tokyo', 'FLIGHT', 'price');
+    expect(fixture.componentInstance['destination']()).toBe('Tokyo');
+  });
+
+  it('clears recent searches from the interface and local storage', () => {
+    const destination = fixture.nativeElement.querySelector('input[name="destination"]') as HTMLInputElement;
+    destination.value = 'Lyon';
+    destination.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.search-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('.clear-recent-searches') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.recent-searches')).toBeNull();
+    expect(localStorage.getItem('voyageo.recent-searches')).toBeNull();
+  });
+
   it('quick-searches a suggested destination in one click', () => {
     const suggestion = Array.from(fixture.nativeElement.querySelectorAll('.suggestion-chip') as NodeListOf<HTMLButtonElement>)
       .find((button) => button.textContent?.includes('Rome'));

@@ -42,4 +42,4 @@ Les builds/signatures de production se font dans Android Studio et Xcode. L’ac
 
 ## Limites fonctionnelles
 
-Le tri est appliqué dans l’interface sans nouvel appel fournisseur ; la recherche démarre à la validation du formulaire. Les offres de démonstration sont clairement identifiées et ne sont pas réservables. Les favoris restent en mémoire de la session. Les comptes permettent l’authentification, mais Voyageo ne stocke pas les réservations et ne traite aucun paiement.
+Le tri est appliqué dans l’interface sans nouvel appel fournisseur ; la recherche démarre à la validation du formulaire. Les six recherches récentes et les favoris des visiteurs sont conservés localement sur l’appareil et peuvent être effacés depuis l’interface. Les offres de démonstration sont clairement identifiées et ne sont pas réservables. Les comptes permettent l’authentification, mais Voyageo ne stocke pas les réservations et ne traite aucun paiement.
