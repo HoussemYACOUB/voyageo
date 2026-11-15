@@ -6,6 +6,9 @@
     <nav class="header-links" aria-label="Navigation principale">
       <a class="active-link" href="#recherche">Explorer</a>
       <button class="favorites-link" type="button" [attr.aria-pressed]="favoritesOnly()" (click)="toggleFavoritesView()">Mes favoris <span class="favorite-count">{{ savedCount() }}</span></button>
+      <button class="trip-plan-link" type="button" (click)="openTripPlan()" aria-label="Ouvrir mon carnet de voyage">
+        Mon voyage <span class="favorite-count">{{ tripPlan().offers.length }}</span>
+      </button>
     </nav>
     <div class="account-actions">
       @if (isAuthenticated()) {
@@ -410,6 +413,12 @@
                   (click)="toggleComparison(offer)">
                   {{ isComparisonSelected(offer.id) ? '✓ Retirer de la comparaison' : comparisonSelection().length >= 3 ? 'Maximum atteint' : '+ Ajouter à comparer' }}
                 </button>
+                <button class="offer-action offer-action-link category-chip trip-plan-toggle" type="button"
+                  [attr.aria-pressed]="isInTripPlan(offer.id)"
+                  [class.selected]="isInTripPlan(offer.id)"
+                  (click)="toggleTripOffer(offer)">
+                  {{ isInTripPlan(offer.id) ? '✓ Retirer de mon voyage' : '+ Ajouter à mon voyage' }}
+                </button>
               </div>
             </article>
           }
@@ -480,6 +489,104 @@
         </div>
         <p class="search-note" role="note">Les prix sont affichés dans leur devise d’origine. Aucune conversion n’est effectuée et la disponibilité doit être vérifiée chez le partenaire.</p>
         <button class="auth-secondary" type="button" (click)="clearComparison()">Effacer les sélections</button>
+      </section>
+    </div>
+  }
+
+  @if (tripPlanOpen()) {
+    <div class="auth-overlay trip-plan-overlay" role="presentation" (click)="closeTripPlan()">
+      <section class="auth-panel trip-plan-panel" role="dialog" aria-modal="true" aria-labelledby="trip-plan-title"
+        (click)="$event.stopPropagation()">
+        <div class="auth-header">
+          <div>
+            <span class="eyebrow section-eyebrow">VOTRE CARNET PERSONNEL</span>
+            <h3 id="trip-plan-title">Préparez votre voyage</h3>
+          </div>
+          <button type="button" class="auth-close" aria-label="Fermer le carnet de voyage" (click)="closeTripPlan()">✕</button>
+        </div>
+        <p class="auth-description">Enregistrez des idées, suivez vos préparatifs et gardez une estimation claire.</p>
+
+        <div class="trip-plan-fields">
+          <label>
+            <span>Nom du voyage</span>
+            <input #tripNameInput name="tripName" maxlength="80" [value]="tripPlan().name" (input)="updateTripName(tripNameInput.value)">
+          </label>
+          <label>
+            <span>Notes personnelles</span>
+            <textarea #tripNotesInput name="tripNotes" rows="3" maxlength="2000" placeholder="Adresses, idées de visites, choses à ne pas oublier…" [value]="tripPlan().notes" (input)="updateTripNotes(tripNotesInput.value)"></textarea>
+          </label>
+        </div>
+
+        <div class="trip-plan-columns">
+          <section class="trip-plan-section" aria-labelledby="trip-offers-title">
+            <div class="trip-section-heading">
+              <h4 id="trip-offers-title">Options enregistrées</h4>
+              <span>{{ tripPlan().offers.length }}</span>
+            </div>
+            @if (tripPlan().offers.length === 0) {
+              <p class="trip-empty-state">Ajoutez des vols, séjours ou transports depuis les cartes d’offres.</p>
+            } @else {
+              <ul class="trip-plan-list">
+                @for (offer of tripPlan().offers; track offer.id) {
+                  <li>
+                    <div class="trip-item-copy">
+                      <span>{{ categoryLabel(offer.category) }} · {{ offer.destination }}</span>
+                      <strong>{{ offer.title }}</strong>
+                      <small>{{ providerDisplayName(offer) }}@if (offer.demo) { · exemple }</small>
+                    </div>
+                    <strong class="trip-item-price">{{ offer.price | currency:offer.currency:'symbol':'1.0-2':'fr-FR' }}</strong>
+                    <button class="trip-remove-button" type="button" [attr.aria-label]="'Retirer ' + offer.title + ' du voyage'" (click)="toggleTripOffer(offer)">✕</button>
+                  </li>
+                }
+              </ul>
+            }
+
+            <div class="trip-budget">
+              <h4>Budget estimé</h4>
+              @if (tripBudgetTotals().length === 0) {
+                <p>Ajoutez des options pour voir l’estimation.</p>
+              } @else {
+                @for (total of tripBudgetTotals(); track total.currency) {
+                  <div><span>Total en {{ total.currency }}</span><strong>{{ total.amount | currency:total.currency:'symbol':'1.0-2':'fr-FR' }}</strong></div>
+                }
+                <small>Les devises sont totalisées séparément, sans conversion. Les prix sont indicatifs et peuvent changer.</small>
+              }
+            </div>
+          </section>
+
+          <section class="trip-plan-section" aria-labelledby="trip-checklist-title">
+            <div class="trip-section-heading">
+              <h4 id="trip-checklist-title">Checklist de départ</h4>
+              <span>{{ tripChecklistProgress().done }}/{{ tripChecklistProgress().total }}</span>
+            </div>
+            <form class="trip-checklist-form" (ngSubmit)="addTripChecklistItem()">
+              <input name="tripChecklistDraft" maxlength="120" placeholder="Ajouter une tâche…" aria-label="Nouvelle tâche de voyage" [ngModel]="tripChecklistDraft()" (ngModelChange)="tripChecklistDraft.set($event)">
+              <button type="submit" aria-label="Ajouter la tâche">+</button>
+            </form>
+            <ul class="trip-checklist">
+              @for (item of tripPlan().checklist; track item.id) {
+                <li>
+                  <button class="trip-check-item" type="button" [attr.aria-pressed]="item.done" (click)="toggleTripChecklistItem(item.id)">
+                    <span class="trip-checkmark" aria-hidden="true">{{ item.done ? '✓' : '' }}</span>
+                    <span [class.done]="item.done">{{ item.label }}</span>
+                  </button>
+                  <button class="trip-remove-button" type="button" [attr.aria-label]="'Supprimer ' + item.label" (click)="removeTripChecklistItem(item.id)">✕</button>
+                </li>
+              }
+            </ul>
+          </section>
+        </div>
+
+        @if (tripPlanStorageError()) {
+          <p class="trip-plan-message trip-plan-error" role="alert">{{ tripPlanStorageError() }}</p>
+        }
+        @if (tripPlanMessage()) {
+          <p class="trip-plan-message" role="status">{{ tripPlanMessage() }}</p>
+        }
+        <div class="trip-plan-footer">
+          <p>Ce carnet est enregistré uniquement dans le stockage local de cet appareil.</p>
+          <button class="auth-submit" type="button" (click)="exportTripPlan()">Exporter mon carnet (JSON)</button>
+        </div>
       </section>
     </div>
   }

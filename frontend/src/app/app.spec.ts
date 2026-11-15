@@ -212,6 +212,122 @@ describe('App', () => {
     expect(fixture.nativeElement.querySelectorAll('.comparison-card')).toHaveLength(2);
   });
 
+  it('builds a persistent trip notebook with a customizable departure checklist', async () => {
+    const addToTrip = fixture.nativeElement.querySelector('.trip-plan-toggle') as HTMLButtonElement;
+    addToTrip.click();
+    fixture.detectChanges();
+
+    expect(addToTrip.getAttribute('aria-pressed')).toBe('true');
+    expect(fixture.nativeElement.querySelector('.trip-plan-link .favorite-count')?.textContent).toContain('1');
+    expect(JSON.parse(localStorage.getItem('voyageo.trip-plan.v1') ?? '{}').offers).toEqual([demoOffers[0]]);
+
+    (fixture.nativeElement.querySelector('.trip-plan-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.trip-plan-panel')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.trip-budget')?.textContent).toContain('39');
+
+    const firstChecklistItem = fixture.nativeElement.querySelector('.trip-check-item') as HTMLButtonElement;
+    firstChecklistItem.click();
+    fixture.detectChanges();
+    expect(firstChecklistItem.getAttribute('aria-pressed')).toBe('true');
+
+    const nameInput = fixture.nativeElement.querySelector('input[name="tripName"]') as HTMLInputElement;
+    nameInput.value = 'Escapade à Rome';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance['tripPlan']().name).toBe('Escapade à Rome');
+
+    const taskInput = fixture.nativeElement.querySelector('input[name="tripChecklistDraft"]') as HTMLInputElement;
+    taskInput.value = 'Réserver une visite';
+    taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.trip-checklist-form button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.trip-checklist')?.textContent).toContain('Réserver une visite');
+    expect(JSON.parse(localStorage.getItem('voyageo.trip-plan.v1') ?? '{}').name).toBe('Escapade à Rome');
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.componentInstance['tripPlan']().name).toBe('Escapade à Rome');
+    (fixture.nativeElement.querySelector('.trip-plan-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('input[name="tripName"]') as HTMLInputElement).value).toBe('Escapade à Rome');
+    expect(fixture.nativeElement.querySelector('.trip-plan-list')?.textContent).toContain('Lyon → Paris');
+    expect(fixture.nativeElement.querySelector('.trip-check-item')?.getAttribute('aria-pressed')).toBe('true');
+    expect(fixture.nativeElement.querySelector('.trip-checklist')?.textContent).toContain('Réserver une visite');
+  });
+
+  it('totals trip-plan costs separately for each currency', () => {
+    const dollarOffer: TravelOffer = {
+      id: 'usd-flight', category: 'FLIGHT', title: 'Vol en dollars', destination: 'New York',
+      provider: 'Test', price: 140, currency: 'USD', details: 'Vol direct', rating: 4.2, demo: false
+    };
+    service.search.mockReturnValue(of([...demoOffers, dollarOffer]));
+    fixture.componentInstance['searchOffers']();
+    fixture.detectChanges();
+    const addButtons = Array.from(fixture.nativeElement.querySelectorAll('.trip-plan-toggle') as NodeListOf<HTMLButtonElement>);
+    addButtons[0].click();
+    addButtons[2].click();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.trip-plan-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const totals = Array.from(fixture.nativeElement.querySelectorAll('.trip-budget > div') as NodeListOf<HTMLElement>);
+    expect(totals).toHaveLength(2);
+    expect(totals.map((total) => total.textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining('EUR'),
+      expect.stringContaining('USD')
+    ]));
+    expect(fixture.nativeElement.querySelector('.trip-budget small')?.textContent).toContain('sans conversion');
+  });
+
+  it('keeps an intentionally empty checklist empty after reload', () => {
+    (fixture.nativeElement.querySelector('.trip-plan-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    while (fixture.nativeElement.querySelector('.trip-checklist .trip-remove-button')) {
+      (fixture.nativeElement.querySelector('.trip-checklist .trip-remove-button') as HTMLButtonElement).click();
+      fixture.detectChanges();
+    }
+
+    expect(JSON.parse(localStorage.getItem('voyageo.trip-plan.v1') ?? '{}').checklist).toEqual([]);
+    fixture.destroy();
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.trip-plan-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.trip-checklist li')).toHaveLength(0);
+    expect(fixture.nativeElement.querySelector('.trip-plan-section[aria-labelledby="trip-checklist-title"] .trip-section-heading')?.textContent).toContain('0/0');
+  });
+
+  it('exports the trip notebook as a named JSON download', () => {
+    const app = fixture.componentInstance;
+    app['updateTripName']('Séjour à Nice');
+    const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    const createObjectURL = vi.fn(() => 'blob:voyageo-test');
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    const clickLink = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('sejour-a-nice.json');
+    });
+
+    try {
+      app['exportTripPlan']();
+      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+      expect(clickLink).toHaveBeenCalledOnce();
+      expect(app['tripPlanMessage']()).toContain('exporté au format JSON');
+    } finally {
+      clickLink.mockRestore();
+      if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL);
+      else Reflect.deleteProperty(URL, 'createObjectURL');
+      if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL);
+      else Reflect.deleteProperty(URL, 'revokeObjectURL');
+    }
+  });
+
   it('adds an offer to favorites and updates the counter', () => {
     const favoriteButton = fixture.nativeElement.querySelector('.save-button') as HTMLButtonElement;
     favoriteButton.click();

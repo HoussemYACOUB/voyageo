@@ -47,12 +47,41 @@ interface RecentSearch {
   category: CategoryFilter;
 }
 
+interface TripChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+}
+
+interface TripPlan {
+  name: string;
+  notes: string;
+  offers: TravelOffer[];
+  checklist: TripChecklistItem[];
+}
+
+interface TripBudgetTotal {
+  currency: string;
+  amount: number;
+}
+
 registerLocaleData(localeFr, 'fr-FR');
 
 const FAVORITES_STORAGE_KEY = 'voyageo.favorites';
 const RECENT_SEARCHES_STORAGE_KEY = 'voyageo.recent-searches';
+const TRIP_PLAN_STORAGE_KEY = 'voyageo.trip-plan.v1';
 const MAX_RECENT_SEARCHES = 6;
 const MAX_COMPARISON_OFFERS = 3;
+const MAX_TRIP_PLAN_OFFERS = 100;
+const MAX_TRIP_CHECKLIST_ITEMS = 50;
+const DEFAULT_TRIP_NAME = 'Mon prochain voyage';
+const DEFAULT_TRIP_CHECKLIST: TripChecklistItem[] = [
+  { id: 'identity-documents', label: 'Vérifier mes papiers d’identité', done: false },
+  { id: 'transport-tickets', label: 'Confirmer mes billets de transport', done: false },
+  { id: 'accommodation', label: 'Confirmer mon hébergement', done: false },
+  { id: 'travel-insurance', label: 'Vérifier mon assurance voyage', done: false },
+  { id: 'charger', label: 'Préparer chargeur et adaptateur', done: false }
+];
 const FALLBACK_CITIES: CitySuggestion[] = [
   { text: 'Paris, France', placeId: 'PAR', iataCode: 'PAR', type: 'city', provider: 'fallback' },
   { text: 'Lyon, France', placeId: 'LYS', iataCode: 'LYS', type: 'city', provider: 'fallback' },
@@ -105,11 +134,44 @@ function isValidDateInput(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function isTravelOffer(value: unknown): value is TravelOffer {
+  if (typeof value !== 'object' || value === null) return false;
+  const offer = value as Record<string, unknown>;
+  return typeof offer['id'] === 'string'
+    && isCategoryFilter(offer['category'])
+    && offer['category'] !== 'ALL'
+    && typeof offer['title'] === 'string'
+    && typeof offer['destination'] === 'string'
+    && typeof offer['provider'] === 'string'
+    && typeof offer['price'] === 'number'
+    && Number.isFinite(offer['price'])
+    && offer['price'] >= 0
+    && typeof offer['currency'] === 'string'
+    && /^[A-Z]{3}$/.test(offer['currency'])
+    && typeof offer['details'] === 'string'
+    && typeof offer['rating'] === 'number'
+    && Number.isFinite(offer['rating'])
+    && typeof offer['demo'] === 'boolean'
+    && (offer['bookingUrl'] === undefined || offer['bookingUrl'] === null || typeof offer['bookingUrl'] === 'string')
+    && (offer['departureDate'] === undefined || offer['departureDate'] === null || typeof offer['departureDate'] === 'string');
+}
+
+function isTripChecklistItem(value: unknown): value is TripChecklistItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item['id'] === 'string'
+    && item['id'].length > 0
+    && typeof item['label'] === 'string'
+    && item['label'].trim().length > 0
+    && item['label'].length <= 120
+    && typeof item['done'] === 'boolean';
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, PriceComparisonChart, FavoriteToggle, MonthlyDateCalendar, PriceAlertPanel],
   templateUrl: './app.html',
-  styleUrls: ['./app.scss', './auth.scss']
+  styleUrls: ['./app.scss', './auth.scss', './trip-plan.scss']
 })
 export class App implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
@@ -139,6 +201,29 @@ export class App implements OnInit {
   protected readonly comparisonSelection = signal<TravelOffer[]>([]);
   protected readonly comparisonOpen = signal(false);
   protected readonly shareStatus = signal('');
+  protected readonly tripPlanOpen = signal(false);
+  protected readonly tripPlan = signal<TripPlan>({
+    name: DEFAULT_TRIP_NAME,
+    notes: '',
+    offers: [],
+    checklist: DEFAULT_TRIP_CHECKLIST.map((item) => ({ ...item }))
+  });
+  protected readonly tripChecklistDraft = signal('');
+  protected readonly tripPlanMessage = signal('');
+  protected readonly tripPlanStorageError = signal('');
+  protected readonly tripChecklistProgress = computed(() => {
+    const checklist = this.tripPlan().checklist;
+    return { done: checklist.filter((item) => item.done).length, total: checklist.length };
+  });
+  protected readonly tripBudgetTotals = computed<TripBudgetTotal[]>(() => {
+    const totals = new Map<string, number>();
+    for (const offer of this.tripPlan().offers) {
+      totals.set(offer.currency, (totals.get(offer.currency) ?? 0) + offer.price);
+    }
+    return [...totals.entries()]
+      .map(([currency, amount]) => ({ currency, amount }))
+      .sort((left, right) => left.currency.localeCompare(right.currency));
+  });
   protected readonly recentSearches = signal<RecentSearch[]>([]);
   protected readonly accountFavoriteOffers = signal<TravelOffer[]>([]);
   protected readonly favorites = signal<Set<string>>(new Set());
@@ -356,6 +441,7 @@ export class App implements OnInit {
   ngOnInit(): void {
     this.restoreFavorites();
     this.restoreRecentSearches();
+    this.restoreTripPlan();
     this.restoreSharedSearch();
     this.authService.bootstrapSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (user) => {
@@ -500,6 +586,170 @@ export class App implements OnInit {
       this.recentSearches.set(validSearches);
     } catch (error) {
       console.warn('Impossible de restaurer les recherches récentes de Voyageo.', error);
+    }
+  }
+
+  private restoreTripPlan(): void {
+    try {
+      const stored = localStorage.getItem(TRIP_PLAN_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        console.warn('Le carnet de voyage local de Voyageo est illisible et a été ignoré.');
+        this.tripPlanStorageError.set('Le carnet enregistré est illisible ; une prochaine modification peut remplacer ces données.');
+        return;
+      }
+
+      const value = parsed as Record<string, unknown>;
+      if (typeof value['name'] !== 'string'
+        || typeof value['notes'] !== 'string'
+        || !Array.isArray(value['offers'])
+        || !Array.isArray(value['checklist'])) {
+        console.warn('Le format du carnet de voyage local de Voyageo est invalide et a été ignoré.');
+        this.tripPlanStorageError.set('Le format du carnet enregistré est invalide ; une prochaine modification peut remplacer ces données.');
+        return;
+      }
+      const storedOffers = value['offers'];
+      const storedChecklist = value['checklist'];
+      const offers = storedOffers.filter(isTravelOffer).slice(0, MAX_TRIP_PLAN_OFFERS);
+      const checklist = storedChecklist.filter(isTripChecklistItem).slice(0, MAX_TRIP_CHECKLIST_ITEMS);
+      if (offers.length !== storedOffers.length || checklist.length !== storedChecklist.length) {
+        console.warn('Certaines données du carnet de voyage de Voyageo sont invalides et ont été ignorées.');
+        this.tripPlanStorageError.set('Certaines entrées illisibles du carnet ont été ignorées.');
+      }
+      this.tripPlan.set({
+        name: typeof value['name'] === 'string' && value['name'].trim()
+          ? value['name'].trim().slice(0, 80)
+          : DEFAULT_TRIP_NAME,
+        notes: typeof value['notes'] === 'string' ? value['notes'].slice(0, 2000) : '',
+        offers,
+        checklist: storedChecklist.length > 0 && checklist.length === 0
+          ? DEFAULT_TRIP_CHECKLIST.map((item) => ({ ...item }))
+          : checklist
+      });
+    } catch (error) {
+      console.warn('Impossible de restaurer le carnet de voyage local de Voyageo.', error);
+      this.tripPlanStorageError.set('Impossible de lire le carnet de voyage enregistré sur cet appareil.');
+    }
+  }
+
+  private persistTripPlan(plan: TripPlan): void {
+    try {
+      localStorage.setItem(TRIP_PLAN_STORAGE_KEY, JSON.stringify(plan));
+      this.tripPlanStorageError.set('');
+    } catch (error) {
+      console.error('Impossible d’enregistrer le carnet de voyage de Voyageo.', error);
+      this.tripPlanStorageError.set('Enregistrement local impossible. Vérifiez l’espace disponible dans votre navigateur.');
+    }
+  }
+
+  private updateTripPlan(update: (plan: TripPlan) => TripPlan): void {
+    const next = update(this.tripPlan());
+    this.tripPlan.set(next);
+    this.persistTripPlan(next);
+  }
+
+  protected openTripPlan(): void {
+    this.comparisonOpen.set(false);
+    this.tripPlanMessage.set('');
+    this.tripPlanOpen.set(true);
+  }
+
+  protected closeTripPlan(): void {
+    this.tripPlanOpen.set(false);
+  }
+
+  protected isInTripPlan(id: string): boolean {
+    return this.tripPlan().offers.some((offer) => offer.id === id);
+  }
+
+  protected toggleTripOffer(offer: TravelOffer): void {
+    this.tripPlanMessage.set('');
+    this.updateTripPlan((plan) => {
+      const exists = plan.offers.some((item) => item.id === offer.id);
+      if (exists) return { ...plan, offers: plan.offers.filter((item) => item.id !== offer.id) };
+      if (plan.offers.length >= MAX_TRIP_PLAN_OFFERS) {
+        this.tripPlanMessage.set('Votre carnet contient déjà le maximum de 100 offres.');
+        return plan;
+      }
+      return { ...plan, offers: [...plan.offers, offer] };
+    });
+  }
+
+  protected updateTripName(name: string): void {
+    this.updateTripPlan((plan) => ({ ...plan, name: name.slice(0, 80) }));
+  }
+
+  protected updateTripNotes(notes: string): void {
+    this.updateTripPlan((plan) => ({ ...plan, notes: notes.slice(0, 2000) }));
+  }
+
+  protected toggleTripChecklistItem(id: string): void {
+    this.updateTripPlan((plan) => ({
+      ...plan,
+      checklist: plan.checklist.map((item) => item.id === id ? { ...item, done: !item.done } : item)
+    }));
+  }
+
+  protected removeTripChecklistItem(id: string): void {
+    this.updateTripPlan((plan) => ({
+      ...plan,
+      checklist: plan.checklist.filter((item) => item.id !== id)
+    }));
+  }
+
+  protected addTripChecklistItem(): void {
+    const label = this.tripChecklistDraft().trim();
+    if (!label) {
+      this.tripPlanMessage.set('Saisissez une tâche à ajouter à votre checklist.');
+      return;
+    }
+    if (label.length > 120) {
+      this.tripPlanMessage.set('Une tâche ne peut pas dépasser 120 caractères.');
+      return;
+    }
+    if (this.tripPlan().checklist.length >= MAX_TRIP_CHECKLIST_ITEMS) {
+      this.tripPlanMessage.set('Votre checklist contient déjà le maximum de 50 tâches.');
+      return;
+    }
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `trip-task-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this.updateTripPlan((plan) => ({
+      ...plan,
+      checklist: [...plan.checklist, { id, label, done: false }]
+    }));
+    this.tripChecklistDraft.set('');
+    this.tripPlanMessage.set('Tâche ajoutée à votre checklist.');
+  }
+
+  protected exportTripPlan(): void {
+    let downloadUrl: string | null = null;
+    let link: HTMLAnchorElement | null = null;
+    try {
+      const content = JSON.stringify(this.tripPlan(), null, 2);
+      downloadUrl = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+      link = document.createElement('a');
+      const safeName = this.tripPlan().name
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'mon-voyage';
+      link.href = downloadUrl;
+      link.download = `${safeName}.json`;
+      document.body.append(link);
+      link.click();
+      this.tripPlanMessage.set('Votre carnet a été exporté au format JSON.');
+    } catch (error) {
+      console.error('Impossible d’exporter le carnet de voyage de Voyageo.', error);
+      this.tripPlanMessage.set('Export impossible dans ce navigateur. Réessayez ou vérifiez ses permissions.');
+    } finally {
+      link?.remove();
+      if (downloadUrl) {
+        const urlToRevoke = downloadUrl;
+        window.setTimeout(() => URL.revokeObjectURL(urlToRevoke), 0);
+      }
     }
   }
 
